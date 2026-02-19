@@ -9,6 +9,7 @@ This lab can be completed in groups of 1-3 and is self-organized. For the *lab p
 
 See the Lab Format document posted in Brightspace for submission details that apply to labs.
 
+Note this lab is available in markdown from the course repository: [https://github.com/colinoflynn/eced3403-computer-architecture/tree/main/labs/lab2](https://github.com/colinoflynn/eced3403-computer-architecture/tree/main/labs/lab2). 
 
 ## Part 1: Interrupt Handler Basics
 
@@ -80,7 +81,7 @@ int main(void) {
 
 Observe the location of the stack pointer in the memory. Remember this is *after* interrupt, you can see the stack contents in Slide 33 of Lecture 3.0.
 
-In the questions for this lab, yo will need to keep a **screenshot of the memory window** and also create a table showing the stack contents, including both value in your run an generic value name.
+In the questions for this lab, you will need to keep a **screenshot of the memory window** and also create a table showing the stack contents, including both value in memory and what it represents (such as `R0`, etc). 
 
 ### Using Atomic Operations
 
@@ -174,11 +175,19 @@ Add `int32_t __pm = atomic_enter();` before the relevant code in the loop, and `
 
 ### Questions for Part 1
 
-1. In the questions for this lab, yo will need to keep a **screenshot of the memory window** and also create a table showing the stack contents, including both value in your run an generic value name.
-2. The function of the different sections, and under which condition corruption is detected.
-3. Where the code should likely be updated "atomically" to prevent this corruption based on your inspection of the code.
-4. Where did you insert the atomic operations specifically in your example - include a snipper of the code with the `atomic_enter()` and `atomic_exit()`.
-5. You will notice that `atomic_enter()` *saves and restores* the interrupt state from the start to the end. Why do you think this is necessary, instead of always just disabling and re-enabling them? Consider what might happen if we had nested code which might itself be inside atomic blocks.
+Answer the following questions about Part 1 of the lab:
+
+#### 1-A: Interrupt Handler & Stack
+
+1. Show a screenshot of the memory window showing the stack contents on IRQ entry.
+2. Create a table showing the stack contents as an offset from the stack pointer, including both value in memory as well as what it repreents (such as `R0`, `PC`, etc). Such a table exists in the lecture slides to help you, you will need to additionally annotate this with the **actual values in memory** you observed.
+
+#### 1-B: Atomic Operations
+
+4. What is the function of the different sections of this code (such as the interrupt and main code), and under which condition does corruption occur (and how is it detected)?
+5. Where in the code should the operations be performed "atomically" to prevent this corruption based on your inspection of the code.
+6. Where did you insert the atomic operations specifically in your example - include a snippet of the code with the `atomic_enter()` and `atomic_exit()`.
+7. You will notice that `atomic_enter()` *saves and restores* the interrupt state from the start to the end. Why do you think this is necessary, instead of always just disabling and re-enabling them? Consider what might happen if we had nested code which might itself be inside atomic blocks.
 
 ## Part 2: Interrupt Handler Priorities
 
@@ -247,6 +256,8 @@ Run the code now, and inspect the value of the `trace[]` variable. To do this, s
 In the above screenshot you can see it contains the value `0x10, 0x10, 0x10, 0x10, ...`. This sequence was recorded with software that did not trigger all of the interrupts.
 
 In your example, you should see a different sequence, which should match calls to the `TRACE()` macro. Using this you can see the code path. These sorts of macros can be helpful where pausing the code may cause issues (like in interrupts).
+
+**WARNING**: The trace macro here is very simple, and runs continously. You thus may see some "overlap" as it overwrites itself. For example if you see the sequence `0x10, 0x20, 0x30, 0x10, 0x20, 0x30, 0x30`, that last `0x30` (which appears repeated) is just that you paused the list in the middle of an update. Ignore that for this lab - for this lab the sequences are always consistent (in this example the sequence would be `0x10`->`0x20`->`0x30`. Look for the most likely pattern when understanding the trace.
 
 ### Priority Modification
 
