@@ -355,7 +355,7 @@ Your diagram should have:
 
 ##### Part 4-2: Stack Overflow
 
-[10 pts] Change the initialization of `depth = 5;` to `depth = 2500;` and run the function again. Using the debugger, answer:
+[10 pts] Change the initialization of `depth = 5;` to `depth = 25000;` and run the function again. Using the debugger, answer:
 
 * What happens?
 * What is the value of `important_global_variable` after this attempt?
