@@ -85,11 +85,11 @@ Include a graph of CPU vs. DMA cycle count for each situation (debug & release b
      ----------------------------------------- */
 ```
 
-2. Run the code as-is - it should debug BUT you will hit a fault on running. Why fault is hit and why does this happen (observe the call to `mpu_enable_protected_region()`.
+2. Run the code as-is - it should debug BUT you will hit a fault on running. What fault is hit and why does this happen (observe the call to `mpu_enable_protected_region()`.
 
-3. Comment out the offending line which causes the fault, but without disabling the MPU.
+3. Comment out the offending line which causes the fault, but ensure the MPU is still enabled (the error is NOT that the MPU is enabled).
 
-4. Using a call to `dma_memcpy_words()`, try to copy 1 word to the `secret_data` variable (HINT: you can try passing the address of `&secret_data` to DMA, or re-use the `dst_buf` from earlier and coy the result from that.
+4. Using a call to `dma_memcpy_words()`, try to copy 1 word to the `secret_data` variable (HINT: you can try passing the address of `&secret_data` to DMA, or re-use the `dst_buf` from earlier and copy the result from that.
 
 5. Observe that you are able to access the memory using the DMA engine **without** causing a fault (if you cause a fault you may have configured something incorrectly).
 
@@ -98,8 +98,8 @@ Include a graph of CPU vs. DMA cycle count for each situation (debug & release b
 Answer the following questions about Part 2 of the lab:
 
 1. Why did the code cause a fault initially? Specifically reference the MPU configuration used in the sample code.
-2. What was your DMA access code?
-2. What implications can you imagine for the DMA engine bypassing the MPU?
+2. What was your DMA access code? Include your code.
+2. What implications can you imagine for the DMA engine bypassing the MPU? Consider a case where a system designer is trying to keep memory private.
 
 ## Submission and Marking
 
