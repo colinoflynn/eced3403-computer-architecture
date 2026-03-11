@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cache Simulator Teaching Tool</title>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --panel: #ffffff;
+      --border: #d9dce7;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --accent-2: #0f766e;
+      --bad: #b91c1c;
+      --good: #166534;
+      --warn: #a16207;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--text); }
+    .wrap { max-width: 1400px; margin: 0 auto; padding: 20px; }
+    h1,h2,h3 { margin: 0 0 10px; }
+    p { margin: 0 0 10px; }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+    .grid { display: grid; grid-template-columns: 360px 1fr; gap: 18px; align-items: start; }
+    .controls { position: sticky; top: 16px; }
+    .control-group { margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid #eceef5; }
+    .control-group:last-child { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+    label { display: block; font-size: 0.92rem; font-weight: 600; margin-bottom: 6px; }
+    input[type="number"], select, textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 0.95rem; background: #fff; color: var(--text); }
+    .button-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    button { border: 1px solid var(--border); background: #fff; padding: 10px 12px; border-radius: 10px; cursor: pointer; font-weight: 600; }
+    button.primary { background: var(--accent); color: white; border-color: var(--accent); }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .metric { background: #fbfcff; border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+    .metric .label { color: var(--muted); font-size: 0.85rem; margin-bottom: 4px; }
+    .metric .value { font-size: 1.45rem; font-weight: 700; }
+    .two-col { display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .small { color: var(--muted); font-size: 0.9rem; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.92rem; }
+    th, td { border-bottom: 1px solid #eceef5; padding: 8px 6px; text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 700; }
+    .cache-grid { display: grid; gap: 10px; }
+    .set-box { border: 1px solid var(--border); border-radius: 12px; padding: 10px; background: #fcfdff; }
+    .set-title { font-weight: 700; margin-bottom: 8px; }
+    .ways { display: flex; flex-wrap: wrap; gap: 8px; }
+    .line { min-width: 110px; padding: 8px; border-radius: 10px; border: 1px solid var(--border); background: #fff; font-size: 0.85rem; }
+    .line.empty { color: var(--muted); background: #f8fafc; }
+    .formula { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin: 8px 0; white-space: pre-wrap; }
+    .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 0.8rem; font-weight: 700; margin-left: 6px; }
+    .good { background: #dcfce7; color: var(--good); }
+    .bad { background: #fee2e2; color: var(--bad); }
+    .warn { background: #fef3c7; color: var(--warn); }
+    .trace-box { max-height: 340px; overflow: auto; border: 1px solid var(--border); border-radius: 12px; padding: 10px; background: #fff; }
+    @media (max-width: 1000px) { .grid, .two-col { grid-template-columns: 1fr; } .controls { position: static; } .metrics { grid-template-columns: repeat(2, minmax(120px, 1fr)); } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="panel" style="margin-bottom:16px;">
+      <h1>Cache Simulator Teaching Tool</h1>
+      <p>This interactive demo is designed for teaching cache basics in computer architecture: hit/miss behavior, locality, associativity, block size, conflict misses, and AMAT.</p>
+      <p class="small">Good classroom demos: sequential access, random access, strided access, repeated working sets, matrix-style row/column scans, and matrix-multiply loop-order comparisons.</p>
+    </div>
+
+    <div class="panel" style="margin-bottom:12px;">
+      <div style="display:flex; gap:8px;">
+        <button id="tabCache" class="primary">Cache Simulator</button>
+        <button id="tabMatmul">Matrix Multiply Demo</button>
+      </div>
+    </div>
+
+    <div id="cacheTab">
+      <div class="grid">
+        <div class="panel controls">
+          <div class="control-group">
+            <h2>Cache Parameters</h2>
+            <label for="cacheSize">Cache size (bytes)</label>
+            <input id="cacheSize" type="number" min="16" step="16" value="256" />
+            <label for="blockSize" style="margin-top:10px;">Block size (bytes)</label>
+            <input id="blockSize" type="number" min="1" step="1" value="16" />
+            <label for="ways" style="margin-top:10px;">Associativity (ways)</label>
+            <select id="ways">
+              <option value="1">1-way (direct mapped)</option>
+              <option value="2">2-way</option>
+              <option value="4">4-way</option>
+              <option value="8">8-way</option>
+            </select>
+            <label for="replacement" style="margin-top:10px;">Replacement policy</label>
+            <select id="replacement">
+              <option value="LRU">LRU</option>
+              <option value="FIFO">FIFO</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <h2>Timing Parameters</h2>
+            <label for="hitTime">Hit time (cycles)</label>
+            <input id="hitTime" type="number" min="1" step="1" value="1" />
+            <label for="missPenalty" style="margin-top:10px;">Miss penalty (cycles)</label>
+            <input id="missPenalty" type="number" min="1" step="1" value="40" />
+            <label for="memAccessPerInstr" style="margin-top:10px;">Memory accesses / instruction</label>
+            <input id="memAccessPerInstr" type="number" min="0" step="0.1" value="1.2" />
+            <label for="baseCPI" style="margin-top:10px;">Base CPI</label>
+            <input id="baseCPI" type="number" min="0" step="0.1" value="1.0" />
+          </div>
+
+          <div class="control-group">
+            <h2>Access Pattern</h2>
+            <label for="pattern">Pattern</label>
+            <select id="pattern">
+              <option value="sequential">Sequential</option>
+              <option value="random">Random</option>
+              <option value="stride">Strided</option>
+              <option value="working_set">Repeated working set</option>
+              <option value="matrix_row">Matrix row-major walk</option>
+              <option value="matrix_col">Matrix column-major walk</option>
+              <option value="matmul_compare">Matrix multiply loop-order compare</option>
+              <option value="custom">Custom list</option>
+            </select>
+            <label for="accessCount" style="margin-top:10px;">Number of accesses</label>
+            <input id="accessCount" type="number" min="1" step="1" value="64" />
+            <label for="wordSize" style="margin-top:10px;">Element size (bytes)</label>
+            <input id="wordSize" type="number" min="1" step="1" value="4" />
+            <label for="stride" style="margin-top:10px;">Stride (elements, for strided pattern)</label>
+            <input id="stride" type="number" min="1" step="1" value="16" />
+            <label for="workingSet" style="margin-top:10px;">Working set size (elements)</label>
+            <input id="workingSet" type="number" min="1" step="1" value="16" />
+            <label for="matrixN" style="margin-top:10px;">Matrix dimension N</label>
+            <input id="matrixN" type="number" min="2" step="1" value="8" />
+            <label for="loopOrder" style="margin-top:10px;">Primary loop order (for matmul compare)</label>
+            <select id="loopOrder">
+              <option value="ijk">i-j-k</option>
+              <option value="ikj" selected>i-k-j</option>
+              <option value="jik">j-i-k</option>
+              <option value="jki">j-k-i</option>
+              <option value="kij">k-i-j</option>
+              <option value="kji">k-j-i</option>
+            </select>
+            <label for="secondLoopOrder" style="margin-top:10px;">Comparison loop order</label>
+            <select id="secondLoopOrder">
+              <option value="ijk" selected>i-j-k</option>
+              <option value="ikj">i-k-j</option>
+              <option value="jik">j-i-k</option>
+              <option value="jki">j-k-i</option>
+              <option value="kij">k-i-j</option>
+              <option value="kji">k-j-i</option>
+            </select>
+            <label for="addressSpace" style="margin-top:10px;">Random address space (bytes)</label>
+            <input id="addressSpace" type="number" min="16" step="16" value="4096" />
+            <label for="customTrace" style="margin-top:10px;">Custom access list (comma separated byte addresses)</label>
+            <textarea id="customTrace" rows="5">0,4,8,12,16,20,24,28,0,4,8,12,256,260,264,268,0,4,8,12</textarea>
+            <div class="button-row">
+              <button class="primary" id="runBtn">Run simulation</button>
+              <button id="stepBtn">Step through</button>
+              <button id="resetBtn">Reset</button>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <h2>Quick Demos</h2>
+            <div class="button-row">
+              <button id="demoSeq">Sequential locality</button>
+              <button id="demoRand">Random misses</button>
+              <button id="demoThrash">Conflict thrash</button>
+              <button id="demoAssoc">Associativity helps</button>
+              <button id="demoMatmul">Matmul loop order</button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="metrics">
+            <div class="metric"><div class="label">Hit rate</div><div class="value" id="hitRate">0.0%</div></div>
+            <div class="metric"><div class="label">Miss rate</div><div class="value" id="missRate">0.0%</div></div>
+            <div class="metric"><div class="label">AMAT</div><div class="value" id="amat">0.00</div></div>
+            <div class="metric"><div class="label">Estimated CPI</div><div class="value" id="cpi">0.00</div></div>
+          </div>
+
+          <div class="two-col">
+            <div class="panel">
+              <h2>Formulas</h2>
+              <div class="formula" id="formulaBox"></div>
+              <div id="configSummary" class="small"></div>
+            </div>
+            <div class="panel">
+              <h2>Interpretation</h2>
+              <p id="interpretation">Run a simulation to see how the cache behaves.</p>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-bottom:16px;">
+            <h2>Cache Contents</h2>
+            <div id="cacheView" class="cache-grid"></div>
+          </div>
+
+          <div class="panel">
+            <h2>Access Trace</h2>
+            <div class="trace-box">
+              <table>
+                <thead>
+                  <tr><th>#</th><th>Address</th><th>Block</th><th>Set</th><th>Tag</th><th>Result</th></tr>
+                </thead>
+                <tbody id="traceTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="matmulTab" style="display:none;">
+      <div class="grid">
+        <div class="panel controls">
+          <div class="control-group">
+            <h2>Matrix Demo Settings</h2>
+            <label for="matrixNMatmul">Matrix dimension N</label>
+            <input id="matrixNMatmul" type="number" min="2" step="1" value="8" />
+
+            <label for="loopOrderMatmul" style="margin-top:10px;">Primary loop order</label>
+            <select id="loopOrderMatmul">
+              <option value="ijk">i-j-k</option>
+              <option value="ikj" selected>i-k-j</option>
+              <option value="jik">j-i-k</option>
+              <option value="jki">j-k-i</option>
+              <option value="kij">k-i-j</option>
+              <option value="kji">k-j-i</option>
+            </select>
+
+            <label for="secondLoopOrderMatmul" style="margin-top:10px;">Comparison loop order</label>
+            <select id="secondLoopOrderMatmul">
+              <option value="ijk" selected>i-j-k</option>
+              <option value="ikj">i-k-j</option>
+              <option value="jik">j-i-k</option>
+              <option value="jki">j-k-i</option>
+              <option value="kij">k-i-j</option>
+              <option value="kji">k-j-i</option>
+            </select>
+
+            <label for="wordSizeMatmul" style="margin-top:10px;">Element size (bytes)</label>
+            <input id="wordSizeMatmul" type="number" min="1" step="1" value="8" />
+          </div>
+
+          <div class="control-group">
+            <h2>Cache Settings for Matrix Demo</h2>
+            <label for="cacheSizeMatmul">Cache size (bytes)</label>
+            <input id="cacheSizeMatmul" type="number" min="16" step="16" value="256" />
+
+            <label for="blockSizeMatmul" style="margin-top:10px;">Block size (bytes)</label>
+            <input id="blockSizeMatmul" type="number" min="1" step="1" value="32" />
+
+            <label for="waysMatmul" style="margin-top:10px;">Associativity (ways)</label>
+            <select id="waysMatmul">
+              <option value="1" selected>1-way (direct mapped)</option>
+              <option value="2">2-way</option>
+              <option value="4">4-way</option>
+              <option value="8">8-way</option>
+            </select>
+
+            <label for="replacementMatmul" style="margin-top:10px;">Replacement policy</label>
+            <select id="replacementMatmul">
+              <option value="LRU" selected>LRU</option>
+              <option value="FIFO">FIFO</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <h2>Run Matrix Demo</h2>
+            <div class="button-row">
+              <button class="primary" id="runMatmulBtn">Run comparison</button>
+              <button id="presetMatmulBtn">Load teaching preset</button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="metrics">
+            <div class="metric"><div class="label">Primary hit rate</div><div class="value" id="matmulPrimaryHit">0.0%</div></div>
+            <div class="metric"><div class="label">Compare hit rate</div><div class="value" id="matmulCompareHit">0.0%</div></div>
+            <div class="metric"><div class="label">Primary misses</div><div class="value" id="matmulPrimaryMisses">0</div></div>
+            <div class="metric"><div class="label">Compare misses</div><div class="value" id="matmulCompareMisses">0</div></div>
+          </div>
+
+          <div class="panel" style="margin-bottom:16px;">
+            <h2>Matrix Multiply Loop-Order Visualization</h2>
+        <div class="two-col">
+          <div>
+            <h3 style="margin-bottom:8px;">Access Pattern Intuition</h3>
+            <div id="matmulSummary" class="small"></div>
+            <table>
+              <thead>
+                <tr><th>Order</th><th>A access</th><th>B access</th><th>C access</th><th>Expected locality</th></tr>
+              </thead>
+              <tbody id="matmulTable"></tbody>
+            </table>
+          </div>
+          <div>
+            <h3 style="margin-bottom:8px;">Array Access Sketch</h3>
+            <div id="matmulSketch" class="small"></div>
+          </div>
+        </div>
+        <div style="margin-top:16px;">
+          <h3 style="margin-bottom:8px;">Loop-Order Comparison</h3>
+          <canvas id="matmulChart" width="900" height="300" style="width:100%; border:1px solid var(--border); border-radius:12px; background:#fff;"></canvas>
+        </div>
+
+        <div style="margin-top:16px;">
+          <h3 style="margin-bottom:8px;">Animated Access Sequence</h3>
+          <div class="button-row" style="margin-bottom:10px;">
+            <button id="playAnimBtn">Play</button>
+            <button id="pauseAnimBtn">Pause</button>
+            <button id="stepAnimBtn">Step</button>
+            <button id="resetAnimBtn">Reset</button>
+          </div>
+          <div class="two-col">
+            <div class="panel">
+              <h3 style="margin-bottom:8px;">Primary order animation</h3>
+              <div id="animPrimaryLabel" class="small"></div>
+              <canvas id="matmulAnimPrimary" width="420" height="420" style="width:100%; border:1px solid var(--border); border-radius:12px; background:#fff;"></canvas>
+            </div>
+            <div class="panel">
+              <h3 style="margin-bottom:8px;">Comparison order animation</h3>
+              <div id="animCompareLabel" class="small"></div>
+              <canvas id="matmulAnimCompare" width="420" height="420" style="width:100%; border:1px solid var(--border); border-radius:12px; background:#fff;"></canvas>
+            </div>
+          </div>
+          <div id="animSummary" class="small" style="margin-top:10px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    class CacheSimulator {
+      constructor({ cacheSize, blockSize, ways, replacement }) {
+        this.cacheSize = cacheSize;
+        this.blockSize = blockSize;
+        this.ways = ways;
+        this.replacement = replacement;
+        this.numSets = Math.floor(cacheSize / (blockSize * ways));
+        if (this.numSets < 1) throw new Error('Configuration gives fewer than 1 set.');
+        this.sets = Array.from({ length: this.numSets }, () => []);
+        this.hits = 0;
+        this.misses = 0;
+        this.trace = [];
+      }
+      access(address) {
+        const block = Math.floor(address / this.blockSize);
+        const set = block % this.numSets;
+        const tag = Math.floor(block / this.numSets);
+        const bucket = this.sets[set];
+        const lineIndex = bucket.findIndex(line => line.tag === tag);
+        let result = 'MISS';
+        if (lineIndex !== -1) {
+          this.hits++;
+          result = 'HIT';
+          if (this.replacement === 'LRU') {
+            const [line] = bucket.splice(lineIndex, 1);
+            bucket.unshift(line);
+          }
+        } else {
+          this.misses++;
+          const newLine = { tag, block };
+          if (bucket.length >= this.ways) bucket.pop();
+          bucket.unshift(newLine);
+        }
+        this.trace.push({ index: this.trace.length, address, block, set, tag, result });
+      }
+      totalAccesses() { return this.hits + this.misses; }
+      hitRate() { return this.totalAccesses() ? this.hits / this.totalAccesses() : 0; }
+      missRate() { return 1 - this.hitRate(); }
+    }
+
+    const el = id => document.getElementById(id);
+    let currentTrace = [];
+    let currentStep = 0;
+    let currentSim = null;
+
+    function getConfig() {
+      return {
+        cacheSize: Number(el('cacheSize').value),
+        blockSize: Number(el('blockSize').value),
+        ways: Number(el('ways').value),
+        replacement: el('replacement').value,
+        hitTime: Number(el('hitTime').value),
+        missPenalty: Number(el('missPenalty').value),
+        memAccessPerInstr: Number(el('memAccessPerInstr').value),
+        baseCPI: Number(el('baseCPI').value),
+        pattern: el('pattern').value,
+        accessCount: Number(el('accessCount').value),
+        wordSize: Number(el('wordSize').value),
+        stride: Number(el('stride').value),
+        workingSet: Number(el('workingSet').value),
+        matrixN: Number(el('matrixN').value),
+        addressSpace: Number(el('addressSpace').value),
+        customTrace: el('customTrace').value,
+        loopOrder: el('loopOrder').value,
+        secondLoopOrder: el('secondLoopOrder').value
+      };
+    }
+
+    function makeMatmulTrace(N, order, elemSize = 8) {
+      const A = 0, B = 1000000, C = 2000000;
+      const loops = order.split('');
+      const trace = [];
+      const addr = (base, r, c) => base + (r * N + c) * elemSize;
+      for (let a = 0; a < N; a++) {
+        for (let b = 0; b < N; b++) {
+          for (let c = 0; c < N; c++) {
+            const vals = {};
+            vals[loops[0]] = a; vals[loops[1]] = b; vals[loops[2]] = c;
+            trace.push(addr(A, vals.i, vals.k));
+            trace.push(addr(B, vals.k, vals.j));
+            trace.push(addr(C, vals.i, vals.j));
+          }
+        }
+      }
+      return trace;
+    }
+
+    function analyzeLoopOrder(order) {
+      const inner = order[2];
+      const a = inner === 'k' ? 'row walk in A' : (inner === 'i' ? 'column walk in A' : 'same A reused across inner loop');
+      const b = inner === 'j' ? 'row walk in B' : (inner === 'k' ? 'column walk in B' : 'same B reused across inner loop');
+      const c = inner === 'j' ? 'row walk in C' : (inner === 'i' ? 'column walk in C' : 'same C reused across inner loop');
+      let quality = 'mixed';
+      if (order === 'ikj' || order === 'kij') quality = 'usually strong for row-major arrays';
+      else if (order === 'ijk' || order === 'jik') quality = 'often hurt by column access to B';
+      else quality = 'depends, but often weaker';
+      return { a, b, c, quality };
+    }
+
+    function makeTrace(cfg) {
+      const t = [];
+      switch (cfg.pattern) {
+        case 'sequential': for (let i = 0; i < cfg.accessCount; i++) t.push(i * cfg.wordSize); break;
+        case 'random': {
+          const maxElem = Math.max(1, Math.floor(cfg.addressSpace / cfg.wordSize));
+          for (let i = 0; i < cfg.accessCount; i++) t.push(Math.floor(Math.random() * maxElem) * cfg.wordSize);
+          break;
+        }
+        case 'stride': for (let i = 0; i < cfg.accessCount; i++) t.push(i * cfg.stride * cfg.wordSize); break;
+        case 'working_set': for (let i = 0; i < cfg.accessCount; i++) t.push((i % cfg.workingSet) * cfg.wordSize); break;
+        case 'matrix_row': for (let i = 0; i < cfg.matrixN; i++) for (let j = 0; j < cfg.matrixN; j++) t.push((i * cfg.matrixN + j) * cfg.wordSize); break;
+        case 'matrix_col': for (let j = 0; j < cfg.matrixN; j++) for (let i = 0; i < cfg.matrixN; i++) t.push((i * cfg.matrixN + j) * cfg.wordSize); break;
+        case 'matmul_compare': return makeMatmulTrace(cfg.matrixN, cfg.loopOrder, cfg.wordSize);
+        case 'custom': return cfg.customTrace.split(',').map(x => Number(x.trim())).filter(x => Number.isFinite(x));
+      }
+      return t;
+    }
+
+    function calcAMAT(hitTime, missRate, missPenalty) { return hitTime + missRate * missPenalty; }
+    function calcCPI(baseCPI, memAccessPerInstr, missRate, missPenalty) { return baseCPI + memAccessPerInstr * missRate * missPenalty; }
+    function addressBits(x) { return Number.isInteger(Math.log2(x)) ? Math.log2(x) : null; }
+
+    function renderCacheView(sim) {
+      const root = el('cacheView');
+      root.innerHTML = '';
+      sim.sets.forEach((setLines, i) => {
+        const setBox = document.createElement('div');
+        setBox.className = 'set-box';
+        setBox.innerHTML = `<div class="set-title">Set ${i}</div>`;
+        const ways = document.createElement('div');
+        ways.className = 'ways';
+        for (let w = 0; w < sim.ways; w++) {
+          const line = document.createElement('div');
+          const entry = setLines[w];
+          line.className = 'line ' + (entry ? '' : 'empty');
+          line.innerHTML = entry ? `Way ${w}<br>tag=${entry.tag}<br>block=${entry.block}` : `Way ${w}<br>empty`;
+          ways.appendChild(line);
+        }
+        setBox.appendChild(ways);
+        root.appendChild(setBox);
+      });
+    }
+
+    function renderTrace(trace) {
+      const tbody = el('traceTable');
+      tbody.innerHTML = '';
+      trace.slice(0, 300).forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${row.index}</td><td>${row.address}</td><td>${row.block}</td><td>${row.set}</td><td>${row.tag}</td><td>${row.result === 'HIT' ? '<span class="badge good">HIT</span>' : '<span class="badge bad">MISS</span>'}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function drawMatmulChart(results) {
+      const canvas = el('matmulChart');
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width, h = canvas.height, m = 50;
+      const cw = w - 2 * m, ch = h - 2 * m;
+      ctx.clearRect(0, 0, w, h);
+      ctx.strokeStyle = '#94a3b8';
+      ctx.beginPath(); ctx.moveTo(m, m); ctx.lineTo(m, h - m); ctx.lineTo(w - m, h - m); ctx.stroke();
+      for (let y = 0; y <= 5; y++) {
+        const frac = y / 5, yy = h - m - frac * ch;
+        ctx.strokeStyle = '#e2e8f0'; ctx.beginPath(); ctx.moveTo(m, yy); ctx.lineTo(w - m, yy); ctx.stroke();
+        ctx.fillStyle = '#64748b'; ctx.fillText((frac * 100).toFixed(0) + '%', 8, yy + 4);
+      }
+      const bw = Math.min(140, cw / Math.max(1, results.length * 2));
+      results.forEach((r, idx) => {
+        const x = m + (idx + 0.5) * (cw / results.length);
+        const bh = r.hitRate * ch;
+        ctx.fillStyle = idx % 2 === 0 ? '#2563eb' : '#0f766e';
+        ctx.fillRect(x - bw / 2, h - m - bh, bw, bh);
+        ctx.fillStyle = '#0f172a'; ctx.fillText(r.order, x - 12, h - m + 20); ctx.fillText((r.hitRate * 100).toFixed(1) + '%', x - 18, h - m - bh - 8);
+        ctx.fillStyle = '#64748b'; ctx.fillText(`${r.misses} misses`, x - 24, h - m + 38);
+      });
+    }
+
+    function getMatmulConfig() {
+      return {
+        matrixN: Number(el('matrixNMatmul').value),
+        loopOrder: el('loopOrderMatmul').value,
+        secondLoopOrder: el('secondLoopOrderMatmul').value,
+        wordSize: Number(el('wordSizeMatmul').value),
+        cacheSize: Number(el('cacheSizeMatmul').value),
+        blockSize: Number(el('blockSizeMatmul').value),
+        ways: Number(el('waysMatmul').value),
+        replacement: el('replacementMatmul').value
+      };
+    }
+
+    function syncMatmulSettingsFromMain() {
+      if (el('matrixNMatmul')) el('matrixNMatmul').value = el('matrixN').value;
+      if (el('loopOrderMatmul')) el('loopOrderMatmul').value = el('loopOrder').value;
+      if (el('secondLoopOrderMatmul')) el('secondLoopOrderMatmul').value = el('secondLoopOrder').value;
+      if (el('wordSizeMatmul')) el('wordSizeMatmul').value = el('wordSize').value;
+      if (el('cacheSizeMatmul')) el('cacheSizeMatmul').value = el('cacheSize').value;
+      if (el('blockSizeMatmul')) el('blockSizeMatmul').value = el('blockSize').value;
+      if (el('waysMatmul')) el('waysMatmul').value = el('ways').value;
+      if (el('replacementMatmul')) el('replacementMatmul').value = el('replacement').value;
+    }
+
+    function applyMatmulPreset() {
+      el('matrixNMatmul').value = 8;
+      el('loopOrderMatmul').value = 'ijk';
+      el('secondLoopOrderMatmul').value = 'ikj';
+      el('wordSizeMatmul').value = 8;
+      el('cacheSizeMatmul').value = 256;
+      el('blockSizeMatmul').value = 32;
+      el('waysMatmul').value = 1;
+      el('replacementMatmul').value = 'LRU';
+    }
+
+    let matmulAnimState = {
+      timer: null,
+      frame: 0,
+      framesPrimary: [],
+      framesCompare: [],
+      cfg: null
+    };
+
+    function makeMatmulFrames(N, order) {
+      const loops = order.split('');
+      const frames = [];
+      const maxFrames = Math.min(N * N * N, 125);
+      let count = 0;
+      for (let a = 0; a < N && count < maxFrames; a++) {
+        for (let b = 0; b < N && count < maxFrames; b++) {
+          for (let c = 0; c < N && count < maxFrames; c++) {
+            const vals = {};
+            vals[loops[0]] = a;
+            vals[loops[1]] = b;
+            vals[loops[2]] = c;
+            frames.push({ i: vals.i, j: vals.j, k: vals.k, order, step: count });
+            count++;
+          }
+        }
+      }
+      return frames;
+    }
+
+    function drawMatrixGrid(canvasId, frame, N, titleText) {
+      const canvas = el(canvasId);
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width, h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      const pad = 18;
+      const sectionGap = 12;
+      const cell = Math.floor((w - pad * 2 - sectionGap * 2) / (3 * N));
+      const gridW = cell * N;
+      const startY = 42;
+      const starts = [pad, pad + gridW + sectionGap, pad + 2 * (gridW + sectionGap)];
+      const labels = ['A[i][k]', 'B[k][j]', 'C[i][j]'];
+
+      ctx.font = '14px sans-serif';
+      ctx.fillStyle = '#334155';
+      ctx.fillText(titleText, pad, 18);
+      if (!frame) {
+        ctx.fillText('Press Play or Step to animate.', pad, 34);
+        return;
+      }
+
+      const coords = [
+        { r: frame.i, c: frame.k },
+        { r: frame.k, c: frame.j },
+        { r: frame.i, c: frame.j }
+      ];
+
+      for (let g = 0; g < 3; g++) {
+        const x0 = starts[g];
+        ctx.fillStyle = '#475569';
+        ctx.fillText(labels[g], x0, 34);
+        for (let r = 0; r < N; r++) {
+          for (let c = 0; c < N; c++) {
+            const x = x0 + c * cell;
+            const y = startY + r * cell;
+            const isHit = coords[g].r === r && coords[g].c === c;
+            ctx.fillStyle = isHit ? (g === 0 ? '#2563eb' : g === 1 ? '#0f766e' : '#b45309') : '#f8fafc';
+            ctx.fillRect(x, y, cell - 1, cell - 1);
+          }
+        }
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.strokeRect(x0, startY, gridW, gridW);
+      }
+
+      ctx.fillStyle = '#0f172a';
+      ctx.fillText(`step ${frame.step}: i=${frame.i}, j=${frame.j}, k=${frame.k}`, pad, h - 14);
+    }
+
+    function updateMatmulAnimationFrame() {
+      const s = matmulAnimState;
+      const f1 = s.framesPrimary[s.frame] || null;
+      const f2 = s.framesCompare[s.frame] || null;
+      const N = s.cfg ? s.cfg.matrixN : 8;
+      drawMatrixGrid('matmulAnimPrimary', f1, N, `Order ${s.cfg ? s.cfg.loopOrder : ''}`);
+      drawMatrixGrid('matmulAnimCompare', f2, N, `Order ${s.cfg ? s.cfg.secondLoopOrder : ''}`);
+      el('animPrimaryLabel').textContent = f1 ? `Current access: A[${f1.i}][${f1.k}], B[${f1.k}][${f1.j}], C[${f1.i}][${f1.j}]` : '';
+      el('animCompareLabel').textContent = f2 ? `Current access: A[${f2.i}][${f2.k}], B[${f2.k}][${f2.j}], C[${f2.i}][${f2.j}]` : '';
+      el('animSummary').textContent = s.cfg ? `The animation shows the first ${s.framesPrimary.length} multiply-accumulate steps. Watch whether B is touched by rows or columns as the inner loop changes.` : '';
+    }
+
+    function resetMatmulAnimation(cfg) {
+      if (matmulAnimState.timer) {
+        clearInterval(matmulAnimState.timer);
+        matmulAnimState.timer = null;
+      }
+      matmulAnimState.cfg = cfg;
+      matmulAnimState.framesPrimary = makeMatmulFrames(cfg.matrixN, cfg.loopOrder);
+      matmulAnimState.framesCompare = makeMatmulFrames(cfg.matrixN, cfg.secondLoopOrder);
+      matmulAnimState.frame = 0;
+      updateMatmulAnimationFrame();
+    }
+
+    function playMatmulAnimation() {
+      if (matmulAnimState.timer) return;
+      matmulAnimState.timer = setInterval(() => {
+        const maxLen = Math.max(matmulAnimState.framesPrimary.length, matmulAnimState.framesCompare.length);
+        if (matmulAnimState.frame < maxLen - 1) {
+          matmulAnimState.frame++;
+          updateMatmulAnimationFrame();
+        } else {
+          clearInterval(matmulAnimState.timer);
+          matmulAnimState.timer = null;
+        }
+      }, 450);
+    }
+
+    function pauseMatmulAnimation() {
+      if (matmulAnimState.timer) {
+        clearInterval(matmulAnimState.timer);
+        matmulAnimState.timer = null;
+      }
+    }
+
+    function stepMatmulAnimation() {
+      const maxLen = Math.max(matmulAnimState.framesPrimary.length, matmulAnimState.framesCompare.length);
+      if (matmulAnimState.frame < maxLen - 1) {
+        matmulAnimState.frame++;
+        updateMatmulAnimationFrame();
+      }
+    }
+
+    function renderMatmulViews(cfg) {
+      resetMatmulAnimation(cfg);
+      const tbody = el('matmulTable');
+      tbody.innerHTML = '';
+      const orders = [...new Set([cfg.loopOrder, cfg.secondLoopOrder])];
+      el('matmulPrimaryHit').textContent = '0.0%';
+      el('matmulCompareHit').textContent = '0.0%';
+      el('matmulPrimaryMisses').textContent = '0';
+      el('matmulCompareMisses').textContent = '0';
+      const results = [];
+      orders.forEach(order => {
+        const info = analyzeLoopOrder(order);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><strong>${order}</strong></td><td>${info.a}</td><td>${info.b}</td><td>${info.c}</td><td>${info.quality}</td>`;
+        tbody.appendChild(tr);
+        const trace = makeMatmulTrace(cfg.matrixN, order, cfg.wordSize);
+        const sim = new CacheSimulator({ cacheSize: cfg.cacheSize, blockSize: cfg.blockSize, ways: cfg.ways, replacement: cfg.replacement });
+        trace.forEach(addr => sim.access(addr));
+        const result = { order, hitRate: sim.hitRate(), misses: sim.misses };
+        results.push(result);
+      });
+
+      const primary = results.find(r => r.order === cfg.loopOrder);
+      const compare = results.find(r => r.order === cfg.secondLoopOrder);
+      if (primary) {
+        el('matmulPrimaryHit').textContent = (primary.hitRate * 100).toFixed(1) + '%';
+        el('matmulPrimaryMisses').textContent = String(primary.misses);
+      }
+      if (compare) {
+        el('matmulCompareHit').textContent = (compare.hitRate * 100).toFixed(1) + '%';
+        el('matmulCompareMisses').textContent = String(compare.misses);
+      }
+      el('matmulSummary').innerHTML = `This view compares two loop orders for row-major matrices of size <strong>${cfg.matrixN}×${cfg.matrixN}</strong>. Changing <strong>j</strong> fastest gives contiguous accesses across a row, while changing <strong>i</strong> fastest jumps by an entire row.`;
+      el('matmulSketch').innerHTML = `<div class="formula">Row-major address:
+addr(X[i][j]) = base + (i × N + j) × element_size
+
+Changing j by 1 → adjacent memory
+Changing i by 1 → jump by N elements</div><div class="small"><strong>i-k-j</strong> often outperforms <strong>i-j-k</strong> because B[k][j] becomes a row walk instead of a column walk, and A[i][k] can be reused across the inner loop.</div>`;
+      drawMatmulChart(results);
+    }
+
+    function renderInterpretation(sim, cfg, amat, cpi) {
+      const hr = sim.hitRate();
+      let msg = 'Custom traces are useful for showing exactly why a particular pattern hits or misses.';
+      if (cfg.pattern === 'sequential') msg = 'Sequential accesses usually benefit from spatial locality because one miss brings in an entire block, making nearby future accesses hit.';
+      else if (cfg.pattern === 'random') msg = 'Random accesses tend to destroy locality, so miss rates are often much higher.';
+      else if (cfg.pattern === 'stride') msg = 'Strided accesses can be friendly or terrible depending on whether the stride aligns badly with the cache mapping.';
+      else if (cfg.pattern === 'working_set') msg = 'A repeated working set shows temporal locality. If the working set fits in the cache, hit rate rises sharply after the initial compulsory misses.';
+      else if (cfg.pattern === 'matrix_row') msg = 'Row-major matrix traversal matches the layout of a typical C array and usually has much better spatial locality.';
+      else if (cfg.pattern === 'matrix_col') msg = 'Column-major traversal on a row-major array often performs worse because consecutive accesses jump farther in memory.';
+      else if (cfg.pattern === 'matmul_compare') msg = 'Matrix multiply loop order changes which array gets row-wise versus column-wise access.';
+      let badge = '<span class="badge warn">moderate</span>';
+      if (hr >= 0.85) badge = '<span class="badge good">excellent locality</span>';
+      else if (hr < 0.4) badge = '<span class="badge bad">poor locality</span>';
+      el('interpretation').innerHTML = `${msg}<br><br>Observed hit rate: <strong>${(hr * 100).toFixed(1)}%</strong> ${badge}<br><br>AMAT is <strong>${amat.toFixed(2)}</strong> cycles and estimated CPI is <strong>${cpi.toFixed(2)}</strong>.`;
+    }
+
+    function render(sim, cfg) {
+      const mr = sim.missRate(), amat = calcAMAT(cfg.hitTime, mr, cfg.missPenalty), cpi = calcCPI(cfg.baseCPI, cfg.memAccessPerInstr, mr, cfg.missPenalty);
+      el('hitRate').textContent = (sim.hitRate() * 100).toFixed(1) + '%';
+      el('missRate').textContent = (mr * 100).toFixed(1) + '%';
+      el('amat').textContent = amat.toFixed(2) + ' cyc';
+      el('cpi').textContent = cpi.toFixed(2);
+      const offsetBits = addressBits(cfg.blockSize), indexBits = addressBits(sim.numSets);
+      el('formulaBox').textContent = `AMAT = HitTime + MissRate × MissPenalty
+     = ${cfg.hitTime} + ${mr.toFixed(4)} × ${cfg.missPenalty}
+     = ${amat.toFixed(4)} cycles
+
+CPI = BaseCPI + MemAccessesPerInstr × MissRate × MissPenalty
+    = ${cfg.baseCPI} + ${cfg.memAccessPerInstr} × ${mr.toFixed(4)} × ${cfg.missPenalty}
+    = ${cpi.toFixed(4)}
+
+CacheSize = Sets × Ways × BlockSize
+          = ${sim.numSets} × ${cfg.ways} × ${cfg.blockSize}
+          = ${sim.numSets * cfg.ways * cfg.blockSize} bytes
+
+Address breakdown:
+Offset bits = log2(BlockSize) = ${offsetBits === null ? 'not integer' : offsetBits}
+Index bits  = log2(Sets)      = ${indexBits === null ? 'not integer' : indexBits}`;
+      el('configSummary').textContent = `Sets: ${sim.numSets}, Ways: ${cfg.ways}, Block size: ${cfg.blockSize} B, Replacement: ${cfg.replacement}, Total accesses: ${sim.totalAccesses()}`;
+      renderInterpretation(sim, cfg, amat, cpi);
+      renderCacheView(sim);
+      renderTrace(sim.trace);
+      renderMatmulViews(cfg);
+    }
+
+    function buildSimulatorAndTrace() {
+      const cfg = getConfig();
+      if (cfg.cacheSize <= 0 || cfg.blockSize <= 0 || cfg.ways <= 0) throw new Error('Cache parameters must be positive.');
+      if (cfg.cacheSize % (cfg.blockSize * cfg.ways) !== 0) throw new Error('Cache size must be divisible by block size × ways.');
+      return { sim: new CacheSimulator(cfg), trace: makeTrace(cfg), cfg };
+    }
+
+    function runFull() {
+      try {
+        const { sim, trace, cfg } = buildSimulatorAndTrace();
+        trace.forEach(addr => sim.access(addr));
+        currentTrace = trace; currentStep = trace.length; currentSim = sim; render(sim, cfg);
+      } catch (err) { alert(err.message); }
+    }
+    function resetSim() {
+      try {
+        const { sim, trace, cfg } = buildSimulatorAndTrace();
+        currentTrace = trace; currentStep = 0; currentSim = sim; render(sim, cfg);
+      } catch (err) { alert(err.message); }
+    }
+    function stepSim() {
+      try {
+        if (!currentSim) resetSim();
+        const cfg = getConfig();
+        if (currentStep >= currentTrace.length) return;
+        currentSim.access(currentTrace[currentStep]); currentStep++; render(currentSim, cfg);
+      } catch (err) { alert(err.message); }
+    }
+    function setDemo(kind) {
+      if (kind === 'seq') { el('cacheSize').value = 256; el('blockSize').value = 16; el('ways').value = 1; el('pattern').value = 'sequential'; el('accessCount').value = 64; el('wordSize').value = 4; }
+      else if (kind === 'rand') { el('cacheSize').value = 256; el('blockSize').value = 16; el('ways').value = 1; el('pattern').value = 'random'; el('accessCount').value = 64; el('wordSize').value = 4; el('addressSpace').value = 4096; }
+      else if (kind === 'thrash') { el('cacheSize').value = 64; el('blockSize').value = 16; el('ways').value = 1; el('pattern').value = 'custom'; el('customTrace').value = '0,64,128,192,0,64,128,192,0,64,128,192'; }
+      else if (kind === 'assoc') { el('cacheSize').value = 64; el('blockSize').value = 16; el('ways').value = 2; el('pattern').value = 'custom'; el('customTrace').value = '0,64,0,64,128,192,128,192,0,64,0,64'; }
+      else if (kind === 'matmul') { el('cacheSize').value = 256; el('blockSize').value = 32; el('ways').value = 1; el('wordSize').value = 8; el('matrixN').value = 8; el('pattern').value = 'matmul_compare'; el('loopOrder').value = 'ijk'; el('secondLoopOrder').value = 'ikj'; }
+      resetSim();
+    }
+    function showTab(name) {
+      el('cacheTab').style.display = name === 'cache' ? 'block' : 'none';
+      el('matmulTab').style.display = name === 'matmul' ? 'block' : 'none';
+      el('tabCache').classList.toggle('primary', name === 'cache');
+      el('tabMatmul').classList.toggle('primary', name === 'matmul');
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+      el('runBtn').addEventListener('click', runFull);
+      el('resetBtn').addEventListener('click', resetSim);
+      el('stepBtn').addEventListener('click', stepSim);
+      el('demoSeq').addEventListener('click', () => setDemo('seq'));
+      el('demoRand').addEventListener('click', () => setDemo('rand'));
+      el('demoThrash').addEventListener('click', () => setDemo('thrash'));
+      el('demoAssoc').addEventListener('click', () => setDemo('assoc'));
+      el('demoMatmul').addEventListener('click', () => { setDemo('matmul'); syncMatmulSettingsFromMain(); renderMatmulViews(getMatmulConfig()); showTab('matmul'); });
+      el('playAnimBtn').addEventListener('click', playMatmulAnimation);
+      el('pauseAnimBtn').addEventListener('click', pauseMatmulAnimation);
+      el('stepAnimBtn').addEventListener('click', stepMatmulAnimation);
+      el('resetAnimBtn').addEventListener('click', () => resetMatmulAnimation(getMatmulConfig()));
+      el('runMatmulBtn').addEventListener('click', () => renderMatmulViews(getMatmulConfig()));
+      el('presetMatmulBtn').addEventListener('click', () => { applyMatmulPreset(); renderMatmulViews(getMatmulConfig()); });
+      el('tabCache').addEventListener('click', () => showTab('cache'));
+      el('tabMatmul').addEventListener('click', () => { syncMatmulSettingsFromMain(); renderMatmulViews(getMatmulConfig()); showTab('matmul'); });
+      resetSim();
+      syncMatmulSettingsFromMain();
+      renderMatmulViews(getMatmulConfig());
+      showTab('cache');
+    });
+  </script>
+</body>
+</html>
