@@ -1,1 +1,3 @@
 /slides/~*
+Cargo.lock
+/slide_demo_code/rust-demo-code/target/
