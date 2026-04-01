@@ -34,7 +34,7 @@ Note this will not show you if flags were updated, just the current state of the
 
 #### 1-1: Table [ 25 pts ]
 
-Fill in the following table (when recreating, you only need to include the `#` column, and the resulting flags `N`, `Z`, `C`, `V`, and `R2`). You can find markdown source at [https://github.com/colinoflynn/eced3403-computer-architecture/tree/main/labs/lab4](https://github.com/colinoflynn/eced3403-computer-architecture/tree/main/labs/lab4).
+Fill in the following table (when recreating, you only need to include the `#` column, and the resulting flags `N`, `Z`, `C`, `V`, and `R2`). You can find markdown source at [https://github.com/colinoflynn/eced3403-computer-architecture/tree/main/labs/lab4](https://github.com/colinoflynn/eced3403-computer-architecture/tree/main/labs/lab4
 
 | #  | Instruction | `R0` (A)     | `R1` (B)     | N | Z | C | V | `R2` (Rd) |
 |----|-------------|--------------|--------------|---|---|---|---|-----------|

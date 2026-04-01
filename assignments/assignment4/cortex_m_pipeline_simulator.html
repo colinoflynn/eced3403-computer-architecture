@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cortex-M Pipeline Simulator v2</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#111827; --panel2:#1f2937; --panel3:#0f172a;
+    --line:#334155; --text:#e5e7eb; --muted:#94a3b8; --accent:#60a5fa;
+    --good:#34d399; --warn:#fbbf24; --bad:#f87171; --purple:#a78bfa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  header{padding:16px 20px;border-bottom:1px solid var(--line);background:linear-gradient(90deg,#09101d,#10192b)}
+  header h1{margin:0 0 4px;font-size:24px}
+  header p{margin:0;color:var(--muted)}
+  .wrap{display:grid;grid-template-columns:1.25fr 1fr;gap:16px;padding:16px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .panel h2{margin:0;padding:12px 14px;font-size:16px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.02)}
+  .content{padding:14px}
+  textarea,input,select{
+    width:100%;background:var(--panel2);color:var(--text);
+    border:1px solid var(--line);border-radius:8px;padding:10px 12px;font:inherit
+  }
+  textarea{resize:vertical;min-height:280px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;line-height:1.35}
+  label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+  .row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:10px}
+  .row3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:10px}
+  .row4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:10px}
+  button{
+    background:var(--accent);color:#08111f;border:0;border-radius:8px;
+    padding:10px 14px;font-weight:700;cursor:pointer
+  }
+  button.secondary{background:#334155;color:var(--text)}
+  button.warn{background:var(--warn);color:#111827}
+  .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .small{font-size:12px;color:var(--muted)}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .note{background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.25);padding:10px 12px;border-radius:8px;font-size:13px;color:#dbeafe}
+  .dirtyNote{margin-top:8px;padding:10px 12px;border:1px solid rgba(251,191,36,.45);background:rgba(251,191,36,.10);border-radius:8px;font-size:13px;color:#fde68a}
+  .modified{outline:2px solid rgba(251,191,36,.55); outline-offset: 0}
+  button.attn{box-shadow:0 0 0 3px rgba(251,191,36,.28)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .good{color:var(--good)} .warning{color:var(--warn)} .badtext{color:var(--bad)}
+  .stageGrid{display:grid;gap:10px}
+  .stage{background:var(--panel2);border:1px solid var(--line);border-radius:10px;min-height:132px;padding:10px}
+  .stage h3{margin:0 0 8px;font-size:14px;color:var(--accent)}
+  .instr{white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:14px}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:5px 8px;font-size:12px;margin-top:7px}
+  .tag{display:inline-block;font-size:11px;background:#1d4ed8;border-radius:999px;padding:2px 6px;color:white;margin-left:6px}
+  .fwdBox{margin-top:8px;padding:8px 10px;border:1px solid rgba(52,211,153,.35);background:rgba(52,211,153,.08);border-radius:8px;font-size:12px;color:#d1fae5}
+  .fwdLine{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin-top:3px}
+
+  .tag.warn{background:#92400e}.tag.mem{background:#065f46}.tag.hz{background:#7c3aed}
+  .table{width:100%;border-collapse:collapse;font-size:13px}
+  .table th,.table td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+  .table th{background:var(--panel2)}
+  .history{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel2);width:100%}
+  .history table{width:100%;border-collapse:collapse;font-size:12px}
+  .history th,.history td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-align:top}
+  .timelineWrap{overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel2);max-height:360px}
+  .timeline{border-collapse:collapse;min-width:720px;width:max-content;font-size:12px}
+  .timeline th,.timeline td{border:1px solid var(--line);padding:4px 6px;text-align:center}
+  .timeline tr.currentCycle td{outline:2px solid var(--accent); outline-offset:-2px}
+  .timeline tr.clickable{cursor:pointer}
+  .timeline tr.clickable:hover td{background:rgba(96,165,250,.08)}
+  .timeline th{position:sticky;top:0;background:var(--panel3);z-index:1}
+  .if{background:#0f2d4a}.id{background:#113b33}.ex{background:#40204f}.mem{background:#3f2e0f}.wb{background:#25324a}
+  .bubble{background:#4b5563}.stall{background:#7c2d12}.flush{background:#7f1d1d}
+  .legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .legend span{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+  .box{width:14px;height:14px;border:1px solid var(--line);display:inline-block;border-radius:3px}
+  details{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:10px}
+  summary{cursor:pointer;font-weight:600}
+  @media (max-width:1100px){.wrap{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Cortex-M Pipeline Simulator v2</h1>
+  <p>Expanded single-page teaching tool with more instructions, per-cycle timeline, hazard details, branch flush visualization, and ready-made examples.</p>
+</header>
+
+<div class="wrap">
+  <div class="panel">
+    <h2>Program + Configuration</h2>
+    <div class="content">
+      <div class="row" style="grid-template-columns:repeat(5,minmax(0,1fr));">
+        <div>
+          <label>Pipeline mode</label>
+          <select id="pipelineMode">
+            <option value="2">2-stage</option>
+            <option value="3" selected>3-stage</option>
+            <option value="5">5-stage</option>
+          </select>
+        </div>
+        <div>
+          <label>Memory latency</label><div class="small">For loads/stores, larger values keep the memory stage occupied longer and increase stall cycles.</div>
+          <select id="memLatency">
+            <option>1</option><option selected>2</option><option>3</option><option>5</option>
+          </select>
+        </div>
+        <div>
+          <label>Forwarding</label>
+          <select id="forwarding">
+            <option value="on" selected>On</option>
+            <option value="off">Off</option>
+          </select>
+        </div>
+        <div>
+          <label>Branch resolution</label>
+          <select id="branchResolve">
+            <option value="early">Early for 2/3-stage</option>
+            <option value="execute" selected>At execute stage</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Register preload</label>
+          <textarea id="regs" style="min-height:120px;">R0 = 0
+R1 = 4
+R2 = 8
+R3 = 1
+R4 = 0
+R5 = 0
+R6 = 0
+R7 = 0</textarea>
+        </div>
+        <div>
+          <label>Memory preload</label>
+          <textarea id="mem" style="min-height:120px;">[0] = 10
+[4] = 20
+[8] = 30
+[12] = 40</textarea>
+        </div>
+      </div>
+
+      <label>Assembly program</label>
+      <textarea id="program">; Supported ops:
+; MOV, ADD, SUB, AND, ORR, EOR, LSL, LSR, CMP
+; LDR, STR
+; B, BEQ, BNE, BGT, BLT
+; NOP
+;
+; Immediate syntax: #5 or #0x10
+; Memory syntax: [R1] or [R1, #4]
+
+start:
+    MOV R0, #0
+    MOV R1, #0
+loop:
+    LDR R2, [R1]
+    ADD R0, R0, R2
+    ADD R1, R1, #4
+    CMP R1, #16
+    BLT loop
+done:
+    NOP</textarea>
+
+      <div class="btns">
+        <button id="loadBtn">Load Program</button><div class="small" style="margin-top:6px">Loading a program clears previous execution state. In 2-stage and 3-stage modes, loads/stores occupy EX/WB for the selected memory latency.</div>
+        <button id="stepBtn" disabled>Single Step Cycle</button>
+        <button id="retireBtn" disabled>Run 1 Retirement</button>
+        <button id="run10Btn" class="secondary" disabled>Run 10 Cycles</button>
+        <button id="run100Btn" class="secondary" disabled>Run 100 Cycles</button>
+        <button id="drainBtn" class="secondary" disabled>Run to Completion</button>
+        
+      </div>
+
+      <div class="btns">
+        <button id="exLoadUse" class="secondary">Example: load/use hazard</button>
+        <button id="exBranch" class="secondary">Example: flags + branch</button>
+        <button id="exStore" class="secondary">Example: load/store</button>
+        <button id="exALU" class="secondary">Example: ALU chain</button>
+        <button id="exForward" class="secondary">Example: forwarding demo</button>
+      </div>
+
+      <details open>
+        <summary>Teaching notes</summary>
+        <div class="small" style="margin-top:8px">
+          This is still a simplified model rather than a full ISA/timing-accurate Cortex-M implementation. The intent is to let students interactively explore hazards, forwarding, branch flushes, memory latency, and the effect of deeper pipelines. In this version, memory latency applies to loads and stores across the pipeline models. Setting latency to 1 should let a dependent use proceed as soon as the load completes, while higher values extend the visible stall.
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <div>
+    <div class="panel" style="margin-bottom:16px">
+      <h2>Pipeline View</h2>
+      <div class="content">
+        <div class="note" id="statusNote">Load a program to begin.</div>
+        <div class="dirtyNote" id="dirtyNote">There are unapplied changes. Press <span class="mono">Load Program</span> to rebuild the pipeline model before running.</div>
+        <div class="small" style="margin-top:8px">When memory latency causes a stall, affected stage boxes will show a <span class="mono">hold</span> tag. Use <span class="mono">Single Step Cycle</span> to watch latency effects cycle-by-cycle.</div>
+        <div style="margin-top:12px" id="stageGrid" class="stageGrid"></div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-bottom:16px">
+      <h2>Machine State</h2>
+      <div class="content">
+        <div class="row4">
+          <div><strong>Cycle</strong><div id="cycleVal" class="mono">0</div></div>
+          <div><strong>PC</strong><div id="pcVal" class="mono">0</div></div>
+          <div><strong>Retired</strong><div id="retiredVal" class="mono">0</div></div>
+          <div><strong>CPI</strong><div id="cpiVal" class="mono">0.00</div></div>
+          <div><strong>Stall cycles</strong><div id="stallVal" class="mono">0</div></div>
+        </div>
+        <div class="row4">
+          <div><strong>N</strong><div id="flagN" class="mono">0</div></div>
+          <div><strong>Z</strong><div id="flagZ" class="mono">0</div></div>
+          <div><strong>C</strong><div id="flagC" class="mono">0</div></div>
+          <div><strong>V</strong><div id="flagV" class="mono">0</div></div>
+        </div>
+
+        <h3 style="margin:10px 0 8px">Registers</h3>
+        <table class="table" id="regTable"></table>
+
+        <h3 style="margin:14px 0 8px">Memory</h3>
+        <table class="table" id="memTable"></table>
+
+        <h3 style="margin:14px 0 8px">Current hazards</h3>
+        <div id="hazardBox" class="small">No hazards currently detected.</div>
+        <div id="forwardBox" class="fwdBox">No active forwarding paths.</div>
+      </div>
+    </div>
+
+    <div class="panel" style="grid-column:1 / -1">
+    <h2>Per-Cycle Timeline</h2>
+    <div class="content">
+      <div class="small" style="margin-bottom:8px">The highlighted row is the current cycle. Click any earlier cycle row to jump back to that machine state.</div>
+      <div class="timelineWrap">
+        <table id="timelineTable" class="timeline"></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap" style="padding-top:0">
+  
+</div>
+
+<div class="wrap" style="padding-top:0">
+    </div>
+  </div>
+</div>
+
+<div class="wrap" style="padding-top:0">
+  
+  </div>
+
+  <div class="panel" style="grid-column:1 / 2">
+    <h2>Execution Log</h2>
+    <div class="content">
+      <div class="history">
+        <table>
+          <thead><tr><th style="width:72px">Cycle</th><th>Event</th></tr></thead>
+          <tbody id="historyBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+
+(() => {
+  const STAGE_NAMES = {
+    2: ["IF", "EX/WB"],
+    3: ["IF", "ID", "EX/WB"],
+    5: ["IF", "ID", "EX", "MEM", "WB"]
+  };
+  const STAGE_CLASS = {"IF":"if","ID":"id","EX":"ex","MEM":"mem","WB":"wb","EX/WB":"ex"};
+
+  const state = {
+    loaded:false, program:[], labels:{}, pc:0, cycle:0, retired:0, stallCycles:0,
+    flags:{N:0,Z:0,C:0,V:0}, regs:{}, mem:{}, pipe:[], history:[],
+    mode:3, memLatency:2, forwarding:true, branchResolve:"execute",
+    timeline:[], snapshots:[], structuralStallReason:"", isDirty:true, nextUid:1
+  };
+
+  function setDefaultRegs(){
+    state.regs = {};
+    for(let i=0;i<=12;i++) state.regs["R"+i]=0;
+    state.regs.SP=0; state.regs.LR=0;
+  }
+
+  function clone(o){ return JSON.parse(JSON.stringify(o)); }
+  function escapeHtml(s){ return String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;"); }
+
+  function log(msg){
+    state.history.unshift({cycle:state.cycle,msg});
+    state.history = state.history.slice(0,350);
+  }
+
+  function parseNumber(t){
+    const s=t.trim();
+    if(/^#?-?0x[0-9a-f]+$/i.test(s)) return parseInt(s.replace('#',''),16);
+    if(/^#?-?\d+$/.test(s)) return parseInt(s.replace('#',''),10);
+    return null;
+  }
+  function normReg(r){
+    const x=r.trim().toUpperCase();
+    if(/^R(1[0-2]|[0-9])$/.test(x)) return x;
+    if(x==="SP"||x==="LR") return x;
+    return null;
+  }
+  function parseRegFile(text){
+    setDefaultRegs();
+    text.split(/\r?\n/).forEach(line=>{
+      const s=line.split(";")[0].trim(); if(!s) return;
+      const m=s.match(/^([A-Za-z0-9]+)\s*=\s*(.+)$/); if(!m) return;
+      const reg=normReg(m[1]); const val=parseNumber(m[2]);
+      if(reg && val!==null) state.regs[reg]=val|0;
+    });
+  }
+  function parseMemFile(text){
+    state.mem={};
+    text.split(/\r?\n/).forEach(line=>{
+      const s=line.split(";")[0].trim(); if(!s) return;
+      const m=s.match(/^\[(.+)\]\s*=\s*(.+)$/); if(!m) return;
+      const a=parseNumber(m[1]); const v=parseNumber(m[2]);
+      if(a!==null && v!==null) state.mem[a|0]=v|0;
+    });
+  }
+  function splitArgs(s){
+    return s.split(",").map(x=>x.trim()).filter(Boolean);
+  }
+
+  function parseInstr(text, sourceLine){
+    const parts=text.trim().split(/\s+/,2);
+    const op=parts[0].toUpperCase();
+    const rest=text.trim().slice(parts[0].length).trim();
+    const args=splitArgs(rest);
+    const ins={
+      uid:0, sourceLine, text:text.trim(), op, args, dst:null, srcRegs:[],
+      writesFlags:false, readsFlags:false, target:null, targetLabel:null,
+      bubble:false, memRemaining:null, result:null, effectiveAddress:null, storeValue:null,
+      decoded:{}, flushed:false
+    };
+    const needReg=(tok,msg="bad register")=>{
+      const r=normReg(tok);
+      if(!r) throw new Error(`${msg} '${tok}' on source line ${sourceLine}`);
+      return r;
+    };
+
+    if(op==="NOP") return ins;
+
+    if(op==="MOV"){
+      if(args.length!==2) throw new Error(`MOV needs 2 operands on line ${sourceLine}`);
+      ins.dst=needReg(args[0]);
+      const imm=parseNumber(args[1]);
+      if(imm!==null){ ins.decoded.kind="imm"; ins.decoded.imm=imm|0; }
+      else { ins.decoded.kind="reg"; ins.decoded.rm=needReg(args[1]); ins.srcRegs.push(ins.decoded.rm); }
+      return ins;
+    }
+
+    if(["ADD","SUB","AND","ORR","EOR"].includes(op)){
+      if(args.length!==3) throw new Error(`${op} needs 3 operands on line ${sourceLine}`);
+      ins.dst=needReg(args[0]);
+      ins.decoded.rn=needReg(args[1]); ins.srcRegs.push(ins.decoded.rn);
+      const imm=parseNumber(args[2]);
+      if(imm!==null){ ins.decoded.kind="imm"; ins.decoded.imm=imm|0; }
+      else { ins.decoded.kind="reg"; ins.decoded.rm=needReg(args[2]); ins.srcRegs.push(ins.decoded.rm); }
+      return ins;
+    }
+
+    if(["LSL","LSR"].includes(op)){
+      if(args.length!==3) throw new Error(`${op} needs 3 operands on line ${sourceLine}`);
+      ins.dst=needReg(args[0]); ins.decoded.rn=needReg(args[1]); ins.srcRegs.push(ins.decoded.rn);
+      const imm=parseNumber(args[2]);
+      if(imm===null) throw new Error(`${op} currently only supports immediate shift count on line ${sourceLine}`);
+      ins.decoded.imm = imm|0;
+      return ins;
+    }
+
+    if(op==="CMP"){
+      if(args.length!==2) throw new Error(`CMP needs 2 operands on line ${sourceLine}`);
+      ins.decoded.rn=needReg(args[0]); ins.srcRegs.push(ins.decoded.rn);
+      const imm=parseNumber(args[1]);
+      if(imm!==null){ ins.decoded.kind="imm"; ins.decoded.imm=imm|0; }
+      else { ins.decoded.kind="reg"; ins.decoded.rm=needReg(args[1]); ins.srcRegs.push(ins.decoded.rm); }
+      ins.writesFlags=true;
+      return ins;
+    }
+
+    if(op==="LDR"){
+      if(args.length!==2) throw new Error(`LDR needs 2 operands on line ${sourceLine}`);
+      ins.dst=needReg(args[0]);
+      const m=args[1].match(/^\[\s*([A-Za-z0-9]+)\s*(?:,\s*(#[^,\]]+|-?0x[0-9A-Fa-f]+|-?\d+))?\s*\]$/);
+      if(!m) throw new Error(`Bad LDR addressing mode on line ${sourceLine}`);
+      ins.decoded.base=needReg(m[1]); ins.srcRegs.push(ins.decoded.base);
+      ins.decoded.offset=m[2] ? (parseNumber(m[2])||0) : 0;
+      return ins;
+    }
+
+    if(op==="STR"){
+      if(args.length!==2) throw new Error(`STR needs 2 operands on line ${sourceLine}`);
+      ins.decoded.rs=needReg(args[0]); ins.srcRegs.push(ins.decoded.rs);
+      const m=args[1].match(/^\[\s*([A-Za-z0-9]+)\s*(?:,\s*(#[^,\]]+|-?0x[0-9A-Fa-f]+|-?\d+))?\s*\]$/);
+      if(!m) throw new Error(`Bad STR addressing mode on line ${sourceLine}`);
+      ins.decoded.base=needReg(m[1]); ins.srcRegs.push(ins.decoded.base);
+      ins.decoded.offset=m[2] ? (parseNumber(m[2])||0) : 0;
+      return ins;
+    }
+
+    if(["B","BEQ","BNE","BGT","BLT"].includes(op)){
+      if(args.length!==1) throw new Error(`${op} needs 1 operand on line ${sourceLine}`);
+      ins.targetLabel=args[0];
+      if(op!=="B") ins.readsFlags=true;
+      return ins;
+    }
+
+    throw new Error(`Unsupported op '${op}' on line ${sourceLine}`);
+  }
+
+  function parseProgram(text){
+    const raw=text.split(/\r?\n/);
+    const program=[], labels={}; let pc=0;
+    raw.forEach((line, idx)=>{
+      const s=line.split(";")[0].trim(); if(!s) return;
+      if(/^[A-Za-z_][A-Za-z0-9_]*:$/.test(s)){ labels[s.slice(0,-1).toLowerCase()] = pc; return; }
+      const mix=s.match(/^([A-Za-z_][A-Za-z0-9_]*:)\s*(.+)$/);
+      let instr=s;
+      if(mix){ labels[mix[1].slice(0,-1).toLowerCase()] = pc; instr = mix[2]; }
+      program.push(parseInstr(instr, idx+1)); pc++;
+    });
+    for(const ins of program){
+      if(ins.op.startsWith("B")){
+        const lbl=ins.targetLabel.toLowerCase();
+        if(!(lbl in labels)) throw new Error(`Unknown label '${ins.targetLabel}' on source line ${ins.sourceLine}`);
+        ins.target = labels[lbl];
+      }
+    }
+    return {program,labels};
+  }
+
+  function bubble(reason){
+    return {uid:0,bubble:true,reason,text:`<bubble: ${reason}>`,op:"BUBBLE",srcRegs:[],dst:null,memRemaining:null,flushed:false};
+  }
+  function emptyPipe(){ state.pipe=new Array(state.mode).fill(null); }
+
+  function setStatus(text, cls=""){
+    const el=document.getElementById("statusNote");
+    el.textContent=text; el.className="note " + cls;
+  }
+
+  function fetchNext(){
+    if(state.pc >= state.program.length) return null;
+    const ins=clone(state.program[state.pc]);
+    ins.uid = state.nextUid++;
+    ins.pc = state.pc;
+    ins.memRemaining = null;
+    ins.result = null;
+    ins.effectiveAddress = null;
+    ins.storeValue = null;
+    ins.flush = false;
+    ins.flushed = false;
+    state.pc++;
+    return ins;
+  }
+
+
+  function saveSnapshot(){
+    state.snapshots.push({
+      cycle: state.cycle,
+      pc: state.pc,
+      retired: state.retired,
+      flags: clone(state.flags),
+      regs: clone(state.regs),
+      mem: clone(state.mem),
+      pipe: clone(state.pipe),
+      history: clone(state.history),
+      timeline: clone(state.timeline)
+    });
+    if(state.snapshots.length > 220) state.snapshots = state.snapshots.slice(-220);
+  }
+
+  function jumpToSnapshot(index){
+    const snap = state.snapshots[index];
+    if(!snap) return;
+    state.cycle = snap.cycle;
+    state.pc = snap.pc;
+    state.retired = snap.retired;
+    state.flags = clone(snap.flags);
+    state.regs = clone(snap.regs);
+    state.mem = clone(snap.mem);
+    state.pipe = clone(snap.pipe);
+    state.history = clone(snap.history);
+    state.timeline = clone(snap.timeline);
+    state.snapshots = state.snapshots.slice(0, index + 1);
+    setStatus(`Jumped back to cycle ${state.cycle}.`, "good");
+    render();
+  }
+
+  function markTimeline(stageEntries, notes=""){
+    const row={cycle:state.cycle, cells:[], notes};
+    for(let i=0;i<state.mode;i++){
+      const ins=state.pipe[i];
+      if(!ins) row.cells.push({text:"", cls:""});
+      else if(ins.flushed) row.cells.push({text:`#${ins.uid} ${ins.op}`, cls:"flush"});
+      else if(ins.bubble) row.cells.push({text:ins.reason || "bubble", cls: ins.reason?.includes("STALL") ? "stall" : "bubble"});
+      else {
+        const stage=getStageNames()[i];
+        const base=stage.includes("MEM") ? "mem" : (stage==="IF"?"if":stage==="ID"?"id":stage.includes("EX")?"ex":"wb");
+        row.cells.push({text:`#${ins.uid} ${ins.op}`, cls:base});
+      }
+    }
+    state.timeline.push(row);
+    if(state.timeline.length > 220) state.timeline = state.timeline.slice(-220);
+  }
+
+  function getStageNames(){ return STAGE_NAMES[state.mode]; }
+
+  function isDone(){ return state.pc >= state.program.length && state.pipe.every(x=>!x); }
+
+  function producerInfoForReg(reg){
+    const consumerIdx = state.mode===2 ? 0 : 1;
+    // Only look at older instructions that are already ahead of the consumer in the pipeline.
+    for(let i=state.pipe.length-1;i>consumerIdx;i--){
+      const ins=state.pipe[i];
+      if(!ins || ins.bubble || ins.flushed || !ins.dst) continue;
+      if(ins.dst !== reg) continue;
+      return {stage:i, ins};
+    }
+    return null;
+  }
+
+  function currentReadiness(reg){
+    const info = producerInfoForReg(reg);
+    if(!info) return {ready:0, reason:null, producer:null, canForward:false};
+
+    const i = info.stage;
+    const ins = info.ins;
+    const isLoad = ins.op === "LDR";
+
+    if(state.mode===2){
+      if(i===1){
+        if(isLoad){
+          const remaining = ins.memRemaining == null ? Math.max(1, state.memLatency) : ins.memRemaining;
+          return remaining > 0
+            ? {ready:1, reason:`load result for ${reg} from #${ins.uid} is still in memory (${remaining} cycle(s) remaining)`, producer:ins, canForward:false}
+            : {ready:0, reason:null, producer:ins, canForward:false};
+        }
+        return state.forwarding
+          ? {ready:0, reason:null, producer:ins, canForward:true}
+          : {ready:1, reason:`ALU result for ${reg} from #${ins.uid} requires writeback (forwarding off)`, producer:ins, canForward:false};
+      }
+      return {ready:1, reason:`${reg} is still being produced by #${ins.uid} ${ins.op}`, producer:ins, canForward:false};
+    }
+
+    if(state.mode===3){
+      if(i===2){
+        if(isLoad){
+          const remaining = ins.memRemaining == null ? Math.max(1, state.memLatency) : ins.memRemaining;
+          return remaining > 0
+            ? {ready:1, reason:`load-use hazard on ${reg}: value from #${ins.uid} ${ins.op} is still in memory (${remaining} cycle(s) remaining)`, producer:ins, canForward:false}
+            : {ready:0, reason:null, producer:ins, canForward:false};
+        }
+        return state.forwarding
+          ? {ready:0, reason:null, producer:ins, canForward:true}
+          : {ready:1, reason:`ALU result for ${reg} from #${ins.uid} requires writeback (forwarding off)`, producer:ins, canForward:false};
+      }
+      return {ready:1, reason:`${reg} is still being produced by #${ins.uid} ${ins.op}`, producer:ins, canForward:false};
+    }
+
+    if(state.mode===5){
+      if(isLoad){
+        if(i===4) return {ready:0, reason:null, producer:ins, canForward:false};
+        if(i===3){
+          const remaining = ins.memRemaining == null ? Math.max(1, state.memLatency) : ins.memRemaining;
+          if(remaining > 0) return {ready:1, reason:`load result for ${reg} from #${ins.uid} is still in MEM (${remaining} cycle(s) remaining)`, producer:ins, canForward:false};
+          return state.forwarding
+            ? {ready:0, reason:null, producer:ins, canForward:true}
+            : {ready:1, reason:`load result for ${reg} from #${ins.uid} is waiting for WB (forwarding off)`, producer:ins, canForward:false};
+        }
+        return {ready:1, reason:`load result for ${reg} from #${ins.uid} is not ready yet`, producer:ins, canForward:false};
+      } else {
+        if(i===4) return {ready:0, reason:null, producer:ins, canForward:false};
+        if(i>=2){
+          return state.forwarding
+            ? {ready:0, reason:null, producer:ins, canForward:true}
+            : {ready:1, reason:`ALU result for ${reg} from #${ins.uid} is waiting for WB (forwarding off)`, producer:ins, canForward:false};
+        }
+        return {ready:1, reason:`${reg} is still being produced by #${ins.uid} ${ins.op}`, producer:ins, canForward:false};
+      }
+    }
+
+    return {ready:0, reason:null, producer:null, canForward:false};
+  }
+
+  function flagsReady(){
+    const consumerIdx = state.mode===2 ? 0 : 1;
+    for(let i=state.pipe.length-1;i>consumerIdx;i--){
+      const ins=state.pipe[i];
+      if(!ins || ins.bubble || ins.flushed || !ins.writesFlags) continue;
+
+      if(state.mode===2){
+        if(i===1){
+          return state.forwarding
+            ? {ready:0, reason:null, producer:ins, canForward:true}
+            : {ready:1, reason:`flags from #${ins.uid} require writeback (forwarding off)`, producer:ins, canForward:false};
+        }
+        return {ready:1, reason:`flags from #${ins.uid} are not ready yet`, producer:ins, canForward:false};
+      }
+
+      if(state.mode===3){
+        if(i===2){
+          return state.forwarding
+            ? {ready:0, reason:null, producer:ins, canForward:true}
+            : {ready:1, reason:`flags from #${ins.uid} require writeback (forwarding off)`, producer:ins, canForward:false};
+        }
+        return {ready:1, reason:`flags from #${ins.uid} are not ready yet`, producer:ins, canForward:false};
+      }
+
+      if(state.mode===5){
+        if(i===4) return {ready:0, reason:null, producer:ins, canForward:false};
+        if(i>=2){
+          return state.forwarding
+            ? {ready:0, reason:null, producer:ins, canForward:true}
+            : {ready:1, reason:`flags from #${ins.uid} are waiting for WB (forwarding off)`, producer:ins, canForward:false};
+        }
+        return {ready:1, reason:`flags from #${ins.uid} are not ready yet`, producer:ins, canForward:false};
+      }
+    }
+    return {ready:0, reason:null, producer:null, canForward:false};
+  }
+
+  function shouldStallAtDecode(){
+    const idx = state.mode===2 ? 0 : 1;
+    const ins = state.pipe[idx];
+    if(!ins || ins.bubble || ins.flushed) return null;
+
+    for(const r of ins.srcRegs || []){
+      const dep = currentReadiness(r);
+      if(dep.ready > 0){
+        return {type:"RAW", reg:r, reason:dep.reason || `RAW hazard on ${r}`, producer:dep.producer, consumer:ins};
+      }
+    }
+
+    if(ins.readsFlags){
+      const dep = flagsReady();
+      if(dep.ready > 0){
+        return {type:"FLAGS", reg:"FLAGS", reason:dep.reason || "waiting for flags", producer:dep.producer, consumer:ins};
+      }
+    }
+
+    return null;
+  }
+
+  function setNZ(val){
+    state.flags.N = ((val|0) < 0) ? 1 : 0;
+    state.flags.Z = ((val|0) === 0) ? 1 : 0;
+  }
+
+  function executeALU(ins){
+    const get = (r)=> state.regs[r] | 0;
+    const a = ins.decoded.rn ? get(ins.decoded.rn) : 0;
+    const b = ins.decoded.kind==="imm" ? ins.decoded.imm|0 : (ins.decoded.rm ? get(ins.decoded.rm) : 0);
+    switch(ins.op){
+      case "MOV": return ins.decoded.kind==="imm" ? ins.decoded.imm|0 : get(ins.decoded.rm);
+      case "ADD": return (a + b) | 0;
+      case "SUB": return (a - b) | 0;
+      case "AND": return (a & b) | 0;
+      case "ORR": return (a | b) | 0;
+      case "EOR": return (a ^ b) | 0;
+      case "LSL": return (get(ins.decoded.rn) << (ins.decoded.imm & 31)) | 0;
+      case "LSR": return (get(ins.decoded.rn) >>> (ins.decoded.imm & 31)) | 0;
+      default: return 0;
+    }
+  }
+
+  function evalBranch(op){
+    const f=state.flags;
+    if(op==="B") return true;
+    if(op==="BEQ") return f.Z===1;
+    if(op==="BNE") return f.Z===0;
+    if(op==="BGT") return f.Z===0 && f.N===f.V;
+    if(op==="BLT") return f.N!==f.V;
+    return false;
+  }
+
+  function executeInstr(ins){
+    if(!ins || ins.bubble || ins.flushed) return "bubble/flush";
+    let event = ins.text;
+    const get=(r)=> state.regs[r] | 0;
+
+    switch(ins.op){
+      case "NOP":
+        break;
+      case "MOV":
+      case "ADD":
+      case "SUB":
+      case "AND":
+      case "ORR":
+      case "EOR":
+      case "LSL":
+      case "LSR":
+        ins.result = executeALU(ins);
+        event += ` => result ${ins.result}`;
+        break;
+      case "CMP": {
+        const a=get(ins.decoded.rn);
+        const b=ins.decoded.kind==="imm" ? ins.decoded.imm|0 : get(ins.decoded.rm);
+        const res=(a-b)|0;
+        setNZ(res);
+        state.flags.C = (a>>>0) >= (b>>>0) ? 1 : 0;
+        const sa=a>>31, sb=b>>31, sr=res>>31;
+        state.flags.V = (sa !== sb && sa !== sr) ? 1 : 0;
+        event += ` => N=${state.flags.N} Z=${state.flags.Z} C=${state.flags.C} V=${state.flags.V}`;
+        break;
+      }
+      case "LDR": {
+        const addr = ((get(ins.decoded.base) + ins.decoded.offset) | 0);
+        ins.effectiveAddress = addr;
+        ins.result = (state.mem.hasOwnProperty(addr) ? state.mem[addr] : 0) | 0;
+        event += ` => read [${addr}] = ${ins.result}`;
+        break;
+      }
+      case "STR": {
+        const addr=((get(ins.decoded.base)+ins.decoded.offset)|0);
+        ins.effectiveAddress=addr;
+        ins.storeValue=get(ins.decoded.rs);
+        event += ` => write [${addr}] = ${ins.storeValue}`;
+        break;
+      }
+      case "B":
+      case "BEQ":
+      case "BNE":
+      case "BGT":
+      case "BLT": {
+        const taken = evalBranch(ins.op);
+        if(taken){
+          state.pc = ins.target;
+          ins.flush = true;
+          event += ` => taken to ${ins.target}`;
+        } else {
+          event += ` => not taken`;
+        }
+        break;
+      }
+      default:
+        event += " => no-op";
+    }
+    return event;
+  }
+
+  function commitInstr(ins){
+    if(!ins || ins.bubble || ins.flushed) return;
+    if(ins.dst && ["MOV","ADD","SUB","AND","ORR","EOR","LSL","LSR","LDR"].includes(ins.op)){
+      state.regs[ins.dst] = ins.result | 0;
+      log(`WB ${ins.dst} = ${ins.result|0} from "${ins.text}"`);
+    } else if(ins.op==="STR"){
+      state.mem[ins.effectiveAddress|0] = ins.storeValue | 0;
+      log(`MEM write [${ins.effectiveAddress|0}] = ${ins.storeValue|0} from "${ins.text}"`);
+    }
+    state.retired++;
+  }
+
+  function flushEarlierStages(){
+    if(state.mode===2){
+      if(state.pipe[0]) state.pipe[0].flushed = true;
+      state.pipe[0] = null;
+    } else if(state.mode===3){
+      if(state.pipe[0]) state.pipe[0].flushed = true;
+      if(state.pipe[1]) state.pipe[1].flushed = true;
+      state.pipe[0]=null; state.pipe[1]=null;
+    } else {
+      if(state.pipe[0]) state.pipe[0].flushed = true;
+      if(state.pipe[1]) state.pipe[1].flushed = true;
+      state.pipe[0]=null; state.pipe[1]=null;
+    }
+    log("Pipeline flushed after taken branch");
+  }
+
+  function maybeResolveEarlyBranch(){
+    if(state.branchResolve !== "early" || state.mode===5) return [];
+    const idx = state.mode===2 ? 1 : 2;
+    const ins = state.pipe[idx];
+    const msgs=[];
+    if(ins && !ins.bubble && !ins.flushed && ["B","BEQ","BNE","BGT","BLT"].includes(ins.op)){
+      const event = executeInstr(ins);
+      msgs.push(event);
+      if(ins.flush) flushEarlierStages();
+    }
+    return msgs;
+  }
+
+  
+  function prepareStageEntry(ins, enteringMemoryStage){
+    if(!ins || ins.bubble || ins.flushed) return ins;
+    if(enteringMemoryStage && ["LDR","STR"].includes(ins.op) && ins.memRemaining == null){
+      ins.memRemaining = Math.max(1, state.memLatency);
+    }
+    return ins;
+  }
+
+function stepCycle(){
+    if(!state.loaded){ setStatus("Load a program first.","warning"); return; }
+    if(isDone()){ setStatus("Program complete.","good"); setControlsEnabled(false); render(); return; }
+
+    state.cycle++;
+    let eventMsgs=[];
+    let stageBusy = false;
+    state.structuralStallReason = "";
+
+    const consumeMemoryCycle = (ins, stageName) => {
+      if(ins.memRemaining == null) ins.memRemaining = Math.max(1, state.memLatency);
+      ins.memRemaining--;
+      eventMsgs.push(`MEM ${ins.text} in ${stageName} (${ins.memRemaining} cycle(s) remaining)`);
+      if(ins.memRemaining <= 0){
+        const msg = executeInstr(ins);
+        eventMsgs.push(msg);
+        return true;
+      }
+      return false;
+    };
+
+    if(state.mode===2){
+      const exwb = state.pipe[1];
+      if(exwb){
+        if(!exwb.bubble && !exwb.flushed && ["LDR","STR"].includes(exwb.op)){
+          const done = consumeMemoryCycle(exwb, "EX/WB");
+          if(done){
+            if(exwb.flush) flushEarlierStages();
+            commitInstr(exwb);
+          } else {
+            stageBusy = true;
+            state.structuralStallReason = `EX/WB busy with memory operation (${exwb.memRemaining} cycle(s) remaining)`;
+          }
+        } else {
+          const msg = executeInstr(exwb);
+          eventMsgs.push(msg);
+          if(exwb.flush) flushEarlierStages();
+          commitInstr(exwb);
+        }
+      }
+    } else if(state.mode===3){
+      const exwb = state.pipe[2];
+      if(exwb){
+        if(!exwb.bubble && !exwb.flushed && ["LDR","STR"].includes(exwb.op)){
+          const done = consumeMemoryCycle(exwb, "EX/WB");
+          if(done){
+            if(exwb.flush) flushEarlierStages();
+            commitInstr(exwb);
+          } else {
+            stageBusy = true;
+            state.structuralStallReason = `EX/WB busy with memory operation (${exwb.memRemaining} cycle(s) remaining)`;
+          }
+        } else {
+          const msg = executeInstr(exwb);
+          eventMsgs.push(msg);
+          if(exwb.flush) flushEarlierStages();
+          commitInstr(exwb);
+        }
+      }
+      eventMsgs.push(...maybeResolveEarlyBranch());
+    } else {
+      const wb = state.pipe[4];
+      if(wb) commitInstr(wb);
+
+      const mem = state.pipe[3];
+      if(mem && !mem.bubble && !mem.flushed && ["LDR","STR"].includes(mem.op)){
+        const done = consumeMemoryCycle(mem, "MEM");
+        if(!done){
+          stageBusy = true;
+          state.structuralStallReason = `MEM busy with memory operation (${mem.memRemaining} cycle(s) remaining)`;
+        }
+      }
+
+      const ex = state.pipe[2];
+      if(ex && !ex.bubble && !ex.flushed && !["LDR","STR"].includes(ex.op)){
+        const msg = executeInstr(ex);
+        eventMsgs.push(msg);
+        if(ex.flush) flushEarlierStages();
+      }
+    }
+
+    const stallInfo = shouldStallAtDecode();
+    let next = new Array(state.mode).fill(null);
+
+    if(state.mode===2){
+      if(stageBusy){
+        next[1] = state.pipe[1];
+        next[0] = state.pipe[0];
+        eventMsgs.push(`STALL: ${state.structuralStallReason}`);
+      } else if(stallInfo){
+        next[1] = bubble("STALL: " + stallInfo.reason);
+        next[0] = state.pipe[0];
+        eventMsgs.push(`STALL: ${stallInfo.reason}`);
+      } else {
+        next[1] = prepareStageEntry(state.pipe[0], true);
+        next[0] = fetchNext();
+      }
+    } else if(state.mode===3){
+      if(stageBusy){
+        next[2] = state.pipe[2];
+        next[1] = state.pipe[1];
+        next[0] = state.pipe[0];
+        eventMsgs.push(`STALL: ${state.structuralStallReason}`);
+      } else {
+        if(stallInfo){
+          next[2] = bubble("STALL: " + stallInfo.reason);
+          next[1] = state.pipe[1];
+          next[0] = state.pipe[0];
+          eventMsgs.push(`STALL: ${stallInfo.reason}`);
+        } else {
+          next[2] = prepareStageEntry(state.pipe[1], true);
+          next[1] = state.pipe[0];
+          next[0] = fetchNext();
+        }
+      }
+    } else {
+      const oldMem = state.pipe[3];
+      const memBusy = oldMem && !oldMem.bubble && !oldMem.flushed && ["LDR","STR"].includes(oldMem.op) && oldMem.memRemaining > 0;
+      const memDone = !oldMem || oldMem.bubble || oldMem.flushed || !["LDR","STR"].includes(oldMem.op) || oldMem.memRemaining <= 0;
+
+      next[4] = memDone ? oldMem : null;
+
+      if(memBusy){
+        next[3] = oldMem;
+        next[2] = bubble("STALL: MEM busy");
+        next[1] = state.pipe[1];
+        next[0] = state.pipe[0];
+        eventMsgs.push(`STALL: ${state.structuralStallReason}`);
+      } else {
+        next[3] = prepareStageEntry(state.pipe[2], true);
+        if(stallInfo){
+          next[2] = bubble("STALL: " + stallInfo.reason);
+          next[1] = state.pipe[1];
+          next[0] = state.pipe[0];
+          eventMsgs.push(`STALL: ${stallInfo.reason}`);
+        } else {
+          next[2] = state.pipe[1];
+          next[1] = state.pipe[0];
+          next[0] = fetchNext();
+        }
+      }
+    }
+
+    if(state.structuralStallReason || stallInfo) state.stallCycles++;
+    state.pipe = next;
+    markTimeline([], eventMsgs.join(' | '));
+    if(eventMsgs.length) log(eventMsgs.join(" | "));
+    saveSnapshot();
+    setStatus(`Cycle ${state.cycle} completed.`, "good");
+    render();
+  }
+  function runUntilRetire(){
+    const before=state.retired;
+    let guard=0;
+    while(state.retired===before && !isDone() && guard<1000){ stepCycle(); guard++; }
+  }
+  function runToCompletion(limit=2000){
+    let guard=0;
+    while(!isDone() && guard<limit){ stepCycle(); guard++; }
+    if(guard>=limit) setStatus("Stopped at safety cycle limit.","warning");
+  }
+
+  function loadProgram(){
+    try{
+      state.mode=parseInt(document.getElementById("pipelineMode").value,10);
+      state.memLatency=parseInt(document.getElementById("memLatency").value,10);
+      state.forwarding=document.getElementById("forwarding").value==="on";
+      state.branchResolve=document.getElementById("branchResolve").value;
+      parseRegFile(document.getElementById("regs").value);
+      parseMemFile(document.getElementById("mem").value);
+      const parsed=parseProgram(document.getElementById("program").value);
+      state.program=parsed.program; state.labels=parsed.labels;
+      state.pc=0; state.cycle=0; state.retired=0; state.stallCycles=0; state.flags={N:0,Z:0,C:0,V:0};
+      state.history=[]; state.timeline=[]; state.snapshots=[]; state.structuralStallReason=""; state.nextUid=1;
+      emptyPipe();
+      state.loaded=true;
+      log(`Loaded ${state.program.length} instruction(s)`);
+      setStatus(`Program loaded (previous state cleared): ${state.program.length} instruction(s).`, "good");
+      setDirty(false);
+      render();
+    } catch(e){
+      state.loaded=false;
+      setStatus(`Load error: ${e.message}`, "badtext");
+      setDirty(true);
+      render();
+    }
+  }
+
+  function resetMachine(){
+    state.loaded=false; state.program=[]; state.labels={}; state.pc=0; state.cycle=0; state.retired=0; state.stallCycles=0;
+    state.flags={N:0,Z:0,C:0,V:0}; state.history=[]; state.timeline=[]; state.snapshots=[]; state.structuralStallReason=""; state.nextUid=1;
+    setDefaultRegs(); state.mem={}; emptyPipe();
+    setStatus("Reset complete. Load a program to begin.", "warning");
+    setDirty(true);
+    render();
+  }
+
+  function forwardingText(){
+    if(!state.loaded) return "No active forwarding paths.";
+    const idx = state.mode===2 ? 0 : 1;
+    const ins = state.pipe[idx];
+    if(!ins || ins.bubble || ins.flushed) return "No active forwarding paths.";
+
+    const lines = [];
+    for(const r of ins.srcRegs || []){
+      const dep = currentReadiness(r);
+      if(dep.producer && dep.canForward && dep.ready===0){
+        const pinfo = producerInfoForReg(r);
+        const producerStage = pinfo ? getStageNames()[pinfo.stage] : "?";
+        const consumerStage = state.mode===2 ? "EX/WB" : "EX";
+        lines.push(`${r}: #${dep.producer.uid} ${dep.producer.op} (${producerStage}) → #${ins.uid} ${ins.op} (${consumerStage})`);
+      }
+    }
+
+    if(ins.readsFlags){
+      const dep = flagsReady();
+      if(dep.producer && dep.canForward && dep.ready===0){
+        let producerStage = "?";
+        const consumerIdx = state.mode===2 ? 0 : 1;
+        for(let i=state.pipe.length-1;i>consumerIdx;i--){
+          const x = state.pipe[i];
+          if(x && !x.bubble && !x.flushed && x.writesFlags){ producerStage = getStageNames()[i]; break; }
+        }
+        const consumerStage = state.mode===2 ? "EX/WB" : "EX";
+        lines.push(`FLAGS: #${dep.producer.uid} ${dep.producer.op} (${producerStage}) → #${ins.uid} ${ins.op} (${consumerStage})`);
+      }
+    }
+
+    if(!lines.length) return "No active forwarding paths.";
+    return lines.map(x => `<div class="fwdLine">${escapeHtml(x)}</div>`).join("");
+  }
+
+  function hazardText(){
+    if(!state.loaded) return "No hazards currently detected.";
+    const parts=[];
+    if(state.structuralStallReason) parts.push("Structural stall: " + state.structuralStallReason);
+    const stall=shouldStallAtDecode();
+    if(stall) parts.push("Decode stall: " + stall.reason);
+    for(let i=0;i<state.pipe.length;i++){
+      const ins=state.pipe[i];
+      if(!ins || ins.bubble || ins.flushed || !["LDR","STR"].includes(ins.op)) continue;
+      if((state.mode===2 && i===1 || state.mode===3 && i===2 || state.mode===5 && i===3) && (ins.memRemaining == null ? state.memLatency : ins.memRemaining) > 0){
+        parts.push("Memory stage busy");
+      }
+    }
+    return parts.length ? parts.join(" | ") : "No hazards currently detected.";
+  }
+
+  function renderStages(){
+    const names=getStageNames();
+    const grid=document.getElementById("stageGrid");
+    grid.style.gridTemplateColumns=`repeat(${names.length}, minmax(0, 1fr))`;
+    grid.innerHTML="";
+    names.forEach((name,i)=>{
+      const ins=state.pipe[i];
+      const div=document.createElement("div");
+      div.className="stage";
+      let tags="";
+      if(ins?.bubble) tags += `<span class="tag warn">bubble</span>`;
+      const holdThisStage = state.structuralStallReason && ((state.mode===2 && (i===0 || i===1)) || (state.mode===3 && (i===0 || i===1 || i===2)) || (state.mode===5 && (i===0 || i===1 || i===3)));
+      if(holdThisStage && ins && !ins.bubble && !ins.flushed) tags += `<span class="tag hz">hold</span>`;
+      if(ins?.flushed) tags += `<span class="tag">flushed</span>`;
+      if(ins && ["LDR","STR"].includes(ins.op) && state.mode===5 && i===3) tags += `<span class="tag mem">mem</span>`;
+      const meta=ins ? `
+        <div class="kv">
+          <div>UID</div><div class="mono">${ins.uid || "-"}</div>
+          <div>PC</div><div class="mono">${ins.pc ?? "-"}</div>
+          <div>Op</div><div class="mono">${ins.op || "-"}</div>
+          <div>Src</div><div class="mono">${(ins.srcRegs||[]).join(", ") || "-"}</div>
+          <div>Dst</div><div class="mono">${ins.dst || "-"}</div>
+          <div>Info</div><div class="mono">${ins.bubble ? (ins.reason||"-") : (() => { let parts=[]; if(ins.memRemaining!=null && ["LDR","STR"].includes(ins.op)) parts.push("memRemaining="+ins.memRemaining); if(ins.effectiveAddress!=null) parts.push("addr="+ins.effectiveAddress); if(ins.result!=null) parts.push("res="+ins.result); return parts.length ? parts.join(", ") : "-"; })()}</div>
+        </div>` : `<div class="small">empty</div>`;
+      div.innerHTML=`<h3>${name}${tags}</h3><div class="instr">${ins ? escapeHtml(ins.text) : ""}</div>${meta}`;
+      grid.appendChild(div);
+    });
+  }
+
+  function renderRegs(){
+    const tbl=document.getElementById("regTable");
+    const regs=Object.keys(state.regs).sort((a,b)=>{
+      const rank=(r)=> r.startsWith("R") ? parseInt(r.slice(1),10) : (r==="SP"?100:101);
+      return rank(a)-rank(b);
+    });
+    let html="<tr>";
+    regs.forEach((r,idx)=>{
+      html += `<th>${r}</th><td class="mono">${state.regs[r]|0}</td>`;
+      if((idx+1)%4===0 && idx!==regs.length-1) html += "</tr><tr>";
+    });
+    html += "</tr>";
+    tbl.innerHTML = html;
+  }
+
+  function renderMem(){
+    const tbl=document.getElementById("memTable");
+    const keys=Object.keys(state.mem).map(Number).sort((a,b)=>a-b);
+    let html="<tr><th>Address</th><th>Value</th></tr>";
+    if(!keys.length) html += `<tr><td colspan="2" class="small">No memory cells defined</td></tr>`;
+    for(const k of keys) html += `<tr><td class="mono">${k}</td><td class="mono">${state.mem[k]|0}</td></tr>`;
+    tbl.innerHTML=html;
+  }
+
+  function renderHistory(){
+    document.getElementById("historyBody").innerHTML = state.history.map(h=>`<tr><td class="mono">${h.cycle}</td><td>${escapeHtml(h.msg)}</td></tr>`).join("");
+  }
+
+  function renderTimeline(){
+    const tbl=document.getElementById("timelineTable");
+    const names=getStageNames();
+    let html="<thead><tr><th>Cycle</th>";
+    names.forEach(n=> html += `<th>${n}</th>`);
+    html += "<th>Notes</th></tr></thead><tbody>";
+    state.timeline.forEach((row, idx) => {
+      const rowClass = row.cycle === state.cycle ? "currentCycle clickable" : "clickable";
+      html += `<tr class="${rowClass}" data-snap="${idx}"><td class="mono">${row.cycle}</td>`;
+      row.cells.forEach(cell=> html += `<td class="${cell.cls}">${escapeHtml(cell.text || "")}</td>`);
+      html += `<td style="text-align:left">${escapeHtml(row.notes || "")}</td></tr>`;
+    });
+    html += "</tbody>";
+    tbl.innerHTML=html;
+    tbl.querySelectorAll("tbody tr[data-snap]").forEach(tr => {
+      tr.addEventListener("click", () => {
+        const idx = parseInt(tr.getAttribute("data-snap"), 10);
+        jumpToSnapshot(idx);
+      });
+    });
+  }
+
+  
+
+  function setDirty(dirty){
+    state.isDirty = !!dirty;
+
+    const dirtyNote = document.getElementById("dirtyNote");
+    if(dirtyNote){
+      dirtyNote.style.display = state.isDirty ? "block" : "none";
+    }
+
+    const loadBtn = document.getElementById("loadBtn");
+    if(loadBtn){
+      if(state.isDirty) loadBtn.classList.add("attn");
+      else loadBtn.classList.remove("attn");
+    }
+
+    const idsToMark = ["pipelineMode","memLatency","forwarding","branchResolve","regs","mem","program"];
+    idsToMark.forEach(id => {
+      const el = document.getElementById(id);
+      if(!el) return;
+      if(state.isDirty) el.classList.add("modified");
+      else el.classList.remove("modified");
+    });
+
+    setControlsEnabled(state.loaded && !state.isDirty && !isDone());
+  }
+
+  function setControlsEnabled(enabled){
+    const ids = ["stepBtn","retireBtn","run10Btn","run100Btn","drainBtn"];
+    ids.forEach(id=>{
+      const el = document.getElementById(id);
+      if(!el) return;
+      if(enabled) el.removeAttribute("disabled");
+      else el.setAttribute("disabled","disabled");
+    });
+  }
+function render(){
+    renderStages(); renderRegs(); renderMem(); renderHistory(); renderTimeline();
+    document.getElementById("cycleVal").textContent = state.cycle;
+    document.getElementById("pcVal").textContent = state.pc;
+    document.getElementById("retiredVal").textContent = state.retired;
+    document.getElementById("cpiVal").textContent = state.retired ? (state.cycle/state.retired).toFixed(2) : "0.00";
+    const stallEl = document.getElementById("stallVal"); if(stallEl) stallEl.textContent = state.stallCycles;
+    document.getElementById("flagN").textContent = state.flags.N;
+    document.getElementById("flagZ").textContent = state.flags.Z;
+    document.getElementById("flagC").textContent = state.flags.C;
+    document.getElementById("flagV").textContent = state.flags.V;
+    document.getElementById("hazardBox").textContent = hazardText();
+    if(document.getElementById("forwardBox")) document.getElementById("forwardBox").innerHTML = forwardingText();
+  }
+
+  function exampleLoadUse(){
+    document.getElementById("regs").value = `R0 = 0
+R1 = 8
+R2 = 0
+R3 = 1
+R4 = 0
+R5 = 0`;
+    document.getElementById("mem").value = `[8] = 33`;
+    document.getElementById("program").value = `start:
+    LDR R2, [R1]
+    ADD R0, R2, #1
+    ADD R3, R3, #1
+    NOP`;
+    setStatus("Loaded example: classic load/use hazard.", "good");
+  }
+  function exampleBranch(){
+    document.getElementById("regs").value = `R0 = 3
+R1 = 3
+R2 = 0`;
+    document.getElementById("mem").value = `[0] = 1`;
+    document.getElementById("program").value = `start:
+    CMP R0, R1
+    BEQ equal
+    MOV R2, #9
+    B done
+equal:
+    MOV R2, #1
+done:
+    NOP`;
+    setStatus("Loaded example: flag dependency and conditional branch.", "good");
+  }
+  function exampleStore(){
+    document.getElementById("regs").value = `R0 = 10
+R1 = 0
+R2 = 4`;
+    document.getElementById("mem").value = `[0] = 1
+[4] = 2`;
+    document.getElementById("program").value = `start:
+    LDR R3, [R1]
+    ADD R3, R3, #5
+    STR R3, [R2]
+    LDR R4, [R2]
+    NOP`;
+    setStatus("Loaded example: load/modify/store.", "good");
+  }
+  function exampleForward(){
+    document.getElementById("regs").value = `R0 = 5
+R1 = 0
+R2 = 0
+R3 = 0
+R4 = 0`;
+    document.getElementById("mem").value = `[0] = 0`;
+    document.getElementById("program").value = `start:
+    ADD R1, R0, #1
+    ADD R2, R1, #1
+    ADD R3, R2, #1
+    ADD R4, R3, #1
+    NOP`;
+    setStatus("Loaded example: forwarding should remove ALU dependency stalls.", "good");
+  }
+
+  function exampleALU(){
+    document.getElementById("regs").value = `R0 = 5
+R1 = 12
+R2 = 3`;
+    document.getElementById("mem").value = `[0] = 0`;
+    document.getElementById("program").value = `start:
+    ADD R3, R0, R1
+    SUB R4, R3, R2
+    AND R5, R4, #7
+    ORR R6, R5, #16
+    EOR R7, R6, #3
+    LSL R8, R7, #1
+    LSR R9, R8, #2
+    NOP`;
+    setStatus("Loaded example: ALU dependency chain.", "good");
+  }
+
+  document.getElementById("loadBtn").addEventListener("click", loadProgram);
+  document.getElementById("stepBtn").addEventListener("click", stepCycle);
+  document.getElementById("retireBtn").addEventListener("click", runUntilRetire);
+  document.getElementById("run10Btn").addEventListener("click", ()=>{ for(let i=0;i<10;i++) stepCycle(); });
+  document.getElementById("run100Btn").addEventListener("click", ()=>{ for(let i=0;i<100;i++) stepCycle(); });
+  document.getElementById("drainBtn").addEventListener("click", ()=> runToCompletion(3000));
+  
+  document.getElementById("exLoadUse").addEventListener("click", exampleLoadUse);
+  document.getElementById("exBranch").addEventListener("click", exampleBranch);
+  document.getElementById("exStore").addEventListener("click", exampleStore);
+  document.getElementById("exALU").addEventListener("click", exampleALU);
+  document.getElementById("exForward").addEventListener("click", exampleForward);
+
+
+  ["pipelineMode","memLatency","forwarding","branchResolve","regs","mem","program"].forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.addEventListener("input", () => {
+      if(state.loaded) setStatus("Inputs changed. Press Load Program to apply changes.", "warning");
+      setDirty(true);
+    });
+    el.addEventListener("change", () => {
+      if(state.loaded) setStatus("Inputs changed. Press Load Program to apply changes.", "warning");
+      setDirty(true);
+    });
+  });
+
+  resetMachine();
+})();
+</script>
+</body>
+</html>
